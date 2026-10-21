@@ -1,5 +1,5 @@
-import React from "react";
-import { Card, Form, Input, Button, Checkbox, Typography, Flex, Space } from "antd";
+import { useState } from "react";
+import { Card, Form, Input, Button, Checkbox, Flex } from "antd";
 import {
   UserOutlined,
   EyeOutlined,
@@ -25,13 +25,7 @@ const LoginForm = ({
   onRegisterClick,
   loading = false
 }: LoginFormProps) => {
-  const [form] = Form.useForm<LoginFormValues>();
-  const [passwordVisible, setPasswordVisible] = React.useState(false);
-  const [visible, setVisible] = React.useState(false);
-
-  const onFinish = (values: LoginFormValues) => {
-    console.log("Received values of form: ", values);
-  };
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   return (
     <Card
@@ -74,7 +68,13 @@ const LoginForm = ({
           <Input.Password
             placeholder="Enter password"
             autoComplete="current-password"
-            iconRender={visible => (visible ? <EyeOutlined /> : <EyeInvisibleOutlined />)}
+            visibilityToggle={{
+              visible: passwordVisible,
+              onVisibleChange: setPasswordVisible,
+            }}
+            iconRender={(visible) =>
+              visible ? <EyeOutlined /> : <EyeInvisibleOutlined />
+            }
             aria-label="Password"
           />
         </Form.Item>
