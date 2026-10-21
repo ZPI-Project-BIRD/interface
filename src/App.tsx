@@ -5,7 +5,6 @@ import { theme } from './theme'
 import RegisterForm from './components/RegisterForm'
 
 function App() {
-  const [count, setCount] = useState(0)
 
   return (
     <ConfigProvider theme={theme}>
