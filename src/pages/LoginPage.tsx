@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { message } from "antd";
+import { message, Flex } from "antd";
 import { useNavigate } from "react-router";
 import LoginForm from "../components/LoginForm";
 import { login } from "../api/auth";
 import type { LoginCredentials } from "../api/auth";
-import { Flex } from "antd";
+import Title from "../components/Title";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -26,8 +26,9 @@ function LoginPage() {
   }
 
   return (
-    <Flex justify="center" align="center" className="min-h-dvh">
+    <Flex vertical justify="center" align="center" className="min-h-dvh">
       {contextHolder}
+      <Title />
       <LoginForm
         onSubmit={handleLogin}
         loading={loading}
