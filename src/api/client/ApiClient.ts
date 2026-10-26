@@ -19,12 +19,14 @@ export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
 }
 
 type ApiMethodOptions = Omit<ApiRequestOptions, "body" | "method">;
+type UnauthorizedHandler = () => void;
 
 export class ApiClient {
   private readonly baseUrl: string;
   private readonly credentials: RequestCredentials;
   private readonly headers: Headers;
   private readonly csrfPath: string;
+  private unauthorizedHandler?: UnauthorizedHandler;
 
   constructor({
     baseUrl,
@@ -56,6 +58,10 @@ export class ApiClient {
 
   delete<TResponse>(path: string, options?: ApiMethodOptions) {
     return this.request<TResponse>(path, { ...options, method: "DELETE" });
+  }
+
+  setUnauthorizedHandler(handler: UnauthorizedHandler) {
+    this.unauthorizedHandler = handler;
   }
 
   async request<TResponse>(
@@ -99,6 +105,10 @@ export class ApiClient {
     const responseBody = await this.readResponseBody(response);
 
     if (!response.ok) {
+      if (response.status === 401) {
+        this.unauthorizedHandler?.();
+      }
+
       throw new ApiError(
         response.status,
         this.extractErrorMessage(responseBody) ?? `Request failed with status ${response.status}.`,
