@@ -1,4 +1,4 @@
-import type { LoginCredentials } from "../contracts/auth";
+import type { AuthenticatedUser, LoginCredentials } from "../contracts/auth";
 import type { ApiClient } from "../client/ApiClient";
 import { ApiError } from "../client/ApiError";
 
@@ -9,9 +9,9 @@ export class AuthApi {
     this.client = client;
   }
 
-  async login({ username, password }: LoginCredentials): Promise<void> {
+  async login({ username, password }: LoginCredentials): Promise<AuthenticatedUser> {
     try {
-      await this.client.post<void>("/auth/login", { username, password });
+      return await this.client.post<AuthenticatedUser>("/auth/login", { username, password });
     } catch (error) {
       this.rethrowWithMessage(error, {
         401: "Invalid username or password.",
@@ -20,8 +20,12 @@ export class AuthApi {
     }
   }
 
-  async me() {
-    return await this.client.get("/auth/me");
+  me(options?: { signal?: AbortSignal }) {
+    return this.client.get<AuthenticatedUser>("/auth/me", options);
+  }
+
+  logout(): Promise<void> {
+    return this.client.post<void>("/auth/logout");
   }
 
   private rethrowWithMessage(

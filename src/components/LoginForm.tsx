@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, Form, Input, Button, Checkbox, Flex } from "antd";
+import { Card, Form, Input, Button, Checkbox, Flex, Popconfirm } from "antd";
 import { UserOutlined, EyeOutlined, EyeInvisibleOutlined } from "@ant-design/icons";
 
 interface LoginFormValues {
@@ -10,31 +10,14 @@ interface LoginFormValues {
 
 export interface LoginFormProps {
   onSubmit?: (values: LoginFormValues) => void | Promise<void>;
-  onRegisterClick?: () => void;
-  onForgotPasswordClick?: () => void;
   loading?: boolean;
 }
 
-const LoginForm = ({
-  onSubmit,
-  onForgotPasswordClick,
-  onRegisterClick,
-  loading = false,
-}: LoginFormProps) => {
+const LoginForm = ({ onSubmit, loading = false }: LoginFormProps) => {
   const [passwordVisible, setPasswordVisible] = useState(false);
 
   return (
-    <Card
-      title="Login"
-      className="w-full max-w-xl"
-      extra={
-        onRegisterClick && ( //show only when this func is passed
-          <Button type="link" onClick={onRegisterClick}>
-            Register
-          </Button>
-        )
-      }
-    >
+    <Card title="Login" className="w-full max-w-xl">
       <Form<LoginFormValues>
         layout="vertical"
         disabled={loading}
@@ -75,14 +58,18 @@ const LoginForm = ({
             <Form.Item name="remember" valuePropName="checked" noStyle>
               <Checkbox>Remember me?</Checkbox>
             </Form.Item>
-            {onForgotPasswordClick && (
-              <Button type="link" onClick={onForgotPasswordClick}>
-                Forgot password?
-              </Button>
-            )}
+            <Popconfirm
+              title="Password recovery"
+              description="Please notify your organization's administrator to request a password reset."
+              okText="Got it"
+              showCancel={false}
+              placement="topRight"
+            >
+              <Button type="link">Forgot password?</Button>
+            </Popconfirm>
           </Flex>
 
-          <Button type="primary" htmlType="submit" loading={loading} block>
+          <Button type="primary" htmlType="submit" loading={loading} block className="h-12!">
             Log in
           </Button>
         </Flex>
