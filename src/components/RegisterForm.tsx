@@ -42,6 +42,7 @@ const RegisterForm = ({
     >
       <Form<RegisterFormValues>
         layout="vertical"
+        disabled={loading}
         requiredMark={false}
         colon={false}
         onFinish={onSubmit}
