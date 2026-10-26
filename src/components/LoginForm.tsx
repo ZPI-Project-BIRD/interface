@@ -30,7 +30,7 @@ const LoginForm = ({
   return (
     <Card
       title="Login"
-      className="w-full max-w-5xl"
+      className="w-full max-w-xl"
       extra={
         onRegisterClick && ( //show only when this func is passed
           <Button type="link" onClick={onRegisterClick}>

@@ -30,7 +30,8 @@ const RegisterForm = ({
   return (
     <Card
       title="Register"
-      className="w-full max-w-2xl"
+      size="medium"
+      className="w-full max-w-xl"
       extra={
         onLoginClick && (
           <Button type="link" onClick={onLoginClick}>
