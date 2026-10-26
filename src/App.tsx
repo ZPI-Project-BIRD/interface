@@ -5,11 +5,13 @@ import { theme } from "./theme";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import MapSelectionPage from "./pages/MapSelectionPage";
+import NotFoundPage from "./pages/NotFoundPage";
 
 function App() {
   return (
     <ConfigProvider theme={theme}>
       <Routes>
+        <Route path="*" element={<NotFoundPage />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />

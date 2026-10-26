@@ -6,6 +6,7 @@ export const theme: ThemeConfig = {
   token: {
     colorPrimary: '#4ab72b',
     colorTextBase: '#252525',
+    colorLink: '#4ab72b',
     fontFamily: 'Arial, Helvetica, sans-serif',
     fontSize: 16,
     borderRadius: 4,
@@ -16,6 +17,11 @@ export const theme: ThemeConfig = {
       headerHeight: 96,
       headerPadding: 32,
       bodyPadding: 32,
+      borderRadiusLG: 16,
+    },
+    Layout: {
+      headerBg: "#ffffff",
+      headerColor: "#252525",
     },
     Form: {
       itemMarginBottom: 28,
