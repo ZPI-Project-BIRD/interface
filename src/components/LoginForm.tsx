@@ -23,7 +23,7 @@ const LoginForm = ({
   onSubmit,
   onForgotPasswordClick,
   onRegisterClick,
-  loading = false
+  loading = false,
 }: LoginFormProps) => {
   const [passwordVisible, setPasswordVisible] = useState(false);
 
@@ -41,6 +41,7 @@ const LoginForm = ({
     >
       <Form<LoginFormValues>
         layout="vertical"
+        disabled={loading}
         requiredMark={false}
         initialValues={{ remember: false }}
         onFinish={onSubmit}
@@ -48,8 +49,8 @@ const LoginForm = ({
         <Form.Item
           name="email"
           rules={[
-            { required: true, message: 'Please enter your email address.' },
-            { type: 'email', message: 'Enter a valid email address.' },
+            { required: true, message: "Please enter your email address." },
+            { type: "email", message: "Enter a valid email address." },
           ]}
         >
           <Input
@@ -63,7 +64,7 @@ const LoginForm = ({
 
         <Form.Item
           name="password"
-          rules={[{ required: true, message: 'Please enter your password.' }]}
+          rules={[{ required: true, message: "Please enter your password." }]}
         >
           <Input.Password
             placeholder="Enter password"
