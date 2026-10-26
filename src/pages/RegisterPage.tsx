@@ -3,8 +3,7 @@ import { useNavigate } from "react-router";
 import RegisterForm from "../components/RegisterForm";
 import { Flex, message } from "antd";
 import Title from "../components/Title";
-import { register } from "../api/auth";
-import type { LoginCredentials } from "../api/auth";
+import { api, type LoginCredentials } from "../api";
 
 function RegisterPage() {
   const navigate = useNavigate();
@@ -14,7 +13,7 @@ function RegisterPage() {
   async function handleRegister(credentials: LoginCredentials) {
     setLoading(true);
     try {
-      await register(credentials);
+      await api.auth.register(credentials);
       messageApi.success("Account created. You can now log in.");
     } catch (error) {
       messageApi.error(

@@ -1,13 +1,9 @@
 import { useState } from "react";
 import { Card, Form, Input, Button, Checkbox, Flex } from "antd";
-import {
-  UserOutlined,
-  EyeOutlined,
-  EyeInvisibleOutlined,
-} from "@ant-design/icons";
+import { UserOutlined, EyeOutlined, EyeInvisibleOutlined } from "@ant-design/icons";
 
 interface LoginFormValues {
-  email: string;
+  username: string;
   password: string;
   remember: boolean;
 }
@@ -47,18 +43,14 @@ const LoginForm = ({
         onFinish={onSubmit}
       >
         <Form.Item
-          name="email"
-          rules={[
-            { required: true, message: "Please enter your email address." },
-            { type: "email", message: "Enter a valid email address." },
-          ]}
+          name="username"
+          rules={[{ required: true, message: "Please enter your username." }]}
         >
           <Input
             prefix={<UserOutlined />}
-            placeholder="user@example.com"
-            type="email"
-            autoComplete="email"
-            aria-label="Email"
+            placeholder="jkowalski"
+            autoComplete="username"
+            aria-label="Username"
           />
         </Form.Item>
 
@@ -73,9 +65,7 @@ const LoginForm = ({
               visible: passwordVisible,
               onVisibleChange: setPasswordVisible,
             }}
-            iconRender={(visible) =>
-              visible ? <EyeOutlined /> : <EyeInvisibleOutlined />
-            }
+            iconRender={(visible) => (visible ? <EyeOutlined /> : <EyeInvisibleOutlined />)}
             aria-label="Password"
           />
         </Form.Item>

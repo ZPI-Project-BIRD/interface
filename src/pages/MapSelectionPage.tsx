@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button, Layout, message, Space } from "antd";
 import { Footer, Content, Header } from "antd/es/layout/layout";
 import { Map, type RectangleBounds } from "../components/Map";
+import { api } from "../api";
 
 const EARTH_RADIUS_METERS = 6_371_008.8;
 const MAX_RECTANGLE_AREA_KM2 = 20;
@@ -41,6 +42,12 @@ const MapSelectionPage = () => {
     },
     [messageApi],
   );
+
+  useEffect(() => {
+    (async () => {
+      console.log(await api.organizations.getMy());
+    })();
+  }, []);
 
   return (
     <Layout className="h-screen">

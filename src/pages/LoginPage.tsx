@@ -2,8 +2,7 @@ import { useState } from "react";
 import { message, Flex } from "antd";
 import { useNavigate } from "react-router";
 import LoginForm from "../components/LoginForm";
-import { login } from "../api/auth";
-import type { LoginCredentials } from "../api/auth";
+import { api, type LoginCredentials } from "../api";
 import Title from "../components/Title";
 
 function LoginPage() {
@@ -14,12 +13,10 @@ function LoginPage() {
   async function handleLogin(credentials: LoginCredentials) {
     setLoading(true);
     try {
-      await login(credentials);
+      await api.auth.login(credentials);
       messageApi.success("Logged in successfully.");
     } catch (error) {
-      messageApi.error(
-        error instanceof Error ? error.message : "Unable to log in.",
-      );
+      messageApi.error(error instanceof Error ? error.message : "Unable to log in.");
     } finally {
       setLoading(false);
     }
