@@ -17,6 +17,11 @@ export const theme: ThemeConfig = {
       headerHeight: 96,
       headerPadding: 32,
       bodyPadding: 32,
+      borderRadiusLG: 16,
+    },
+    Layout: {
+      headerBg: "#ffffff",
+      headerColor: "#252525",
     },
     Form: {
       itemMarginBottom: 28,
