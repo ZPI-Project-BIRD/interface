@@ -15,7 +15,7 @@ function LoginPage() {
     try {
       await login(credentials);
       messageApi.success("Logged in successfully.");
-      navigate("/map-selection", { replace: true });
+      navigate("/projects", { replace: true });
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "Unable to log in.");
     }

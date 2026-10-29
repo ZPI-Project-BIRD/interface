@@ -28,10 +28,11 @@ export interface RectangleBounds {
 interface MapProps {
   mode: MapMode;
   rectangle: RectangleBounds | null;
-  onRectangleDraw: (rectangle: RectangleBounds) => void;
+  interactive?: boolean;
+  onRectangleDraw?: (rectangle: RectangleBounds) => void;
 }
 
-export function Map({ mode, rectangle, onRectangleDraw }: MapProps) {
+export function Map({ mode, rectangle, interactive = true, onRectangleDraw }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -64,12 +65,19 @@ export function Map({ mode, rectangle, onRectangleDraw }: MapProps) {
       maxZoom: 16,
       maxBounds: POLAND_BOUNDS,
       maxBoundsViscosity: 1,
+      boxZoom: interactive,
+      doubleClickZoom: interactive,
+      dragging: interactive,
+      keyboard: interactive,
+      scrollWheelZoom: interactive,
+      touchZoom: interactive,
+      zoomControl: interactive,
     }).setView(PWR_B4_CENTER, INITIAL_ZOOM);
     mapRef.current = map;
 
     let isMounted = true;
 
-    if (navigator.geolocation) {
+    if (interactive && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
           if (isMounted) {
@@ -132,8 +140,6 @@ export function Map({ mode, rectangle, onRectangleDraw }: MapProps) {
 
     highResolutionLayer.addTo(map);
 
-    map.addEventListener("zoom", (e) => console.log(e));
-
     const resizeObserver = new ResizeObserver(() => {
       map.invalidateSize({ animate: false, pan: false });
     });
@@ -150,7 +156,7 @@ export function Map({ mode, rectangle, onRectangleDraw }: MapProps) {
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [interactive]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -159,11 +165,12 @@ export function Map({ mode, rectangle, onRectangleDraw }: MapProps) {
       return;
     }
 
+    const bounds = L.latLngBounds(
+      [rectangle.south, rectangle.west],
+      [rectangle.north, rectangle.east],
+    );
     const layer = L.rectangle(
-      [
-        [rectangle.south, rectangle.west],
-        [rectangle.north, rectangle.east],
-      ],
+      bounds,
       {
         color: "#4ab72b",
         fillOpacity: 0.15,
@@ -172,16 +179,20 @@ export function Map({ mode, rectangle, onRectangleDraw }: MapProps) {
       },
     ).addTo(map);
 
+    if (!interactive) {
+      map.fitBounds(bounds, { animate: false, maxZoom: 16, padding: [40, 40] });
+    }
+
     return () => {
       layer.remove();
     };
-  }, [rectangle]);
+  }, [interactive, rectangle]);
 
   useEffect(
     function drawRectangleEffect() {
       const map = mapRef.current;
 
-      if (!map || mode !== "draw-rectangle") {
+      if (!map || !interactive || mode !== "draw-rectangle") {
         return;
       }
 
@@ -236,7 +247,7 @@ export function Map({ mode, rectangle, onRectangleDraw }: MapProps) {
           return;
         }
 
-        onRectangleDraw({
+        onRectangleDraw?.({
           north: bounds.getNorth(),
           east: bounds.getEast(),
           south: bounds.getSouth(),
@@ -260,7 +271,7 @@ export function Map({ mode, rectangle, onRectangleDraw }: MapProps) {
         }
       };
     },
-    [mode, onRectangleDraw],
+    [interactive, mode, onRectangleDraw],
   );
 
   return <div ref={containerRef} className="h-full w-full" />;

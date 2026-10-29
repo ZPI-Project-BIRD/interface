@@ -6,6 +6,9 @@ import { theme } from "./theme";
 import LoginPage from "./pages/LoginPage";
 import MapSelectionPage from "./pages/MapSelectionPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import CreateProjectPage from "./pages/projects/CreateProjectPage";
+import ProjectsPage from "./pages/projects/ProjectsPage";
+import ProjectPage from "./pages/projects/ProjectPage";
 import { useAuthStore } from "./stores/authStore";
 import { RequireAuth, RequireGuest } from "./components/AuthRouteGuards";
 
@@ -30,8 +33,11 @@ function App() {
           </Route>
 
           <Route element={<RequireAuth />}>
-            <Route path="/" element={<Navigate to="/map-selection" replace />} />
+            <Route path="/" element={<Navigate to="/projects" replace />} />
+            <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/map-selection" element={<MapSelectionPage />} />
+            <Route path="/projects/create" element={<CreateProjectPage />} />
+            <Route path="/projects/:projectId" element={<ProjectPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

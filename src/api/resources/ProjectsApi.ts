@@ -1,15 +1,5 @@
 import type { ApiClient } from "../client/ApiClient";
-
-export interface Point {
-  latitude: number;
-  longitude: number;
-}
-
-export interface CreateProjectPayload {
-  name: string;
-  topLeft: Point;
-  bottomRight: Point;
-}
+import type { CreateProjectPayload, Project } from "../contracts/projects";
 
 export class ProjectsApi {
   private readonly client: ApiClient;
@@ -18,14 +8,11 @@ export class ProjectsApi {
     this.client = client;
   }
 
-  async create(organizationId: string, payload: CreateProjectPayload) {
-    return await this.client.post(
-      `/api/organizations/${organizationId}/projects`,
-      JSON.stringify(payload),
-    );
+  async create(organizationId: string, payload: CreateProjectPayload): Promise<Project> {
+    return await this.client.post(`/organizations/${organizationId}/projects`, payload);
   }
 
-  async getAll(organizationId: string) {
-    return await this.client.get(`/api/organizations/${organizationId}/projects`);
+  async getAll(organizationId: string): Promise<Project[]> {
+    return await this.client.get(`/organizations/${organizationId}/projects`);
   }
 }
