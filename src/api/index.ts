@@ -18,3 +18,5 @@ export { ApiClient } from "./client/ApiClient";
 export { ApiError } from "./client/ApiError";
 export { AuthApi } from "./resources/AuthApi";
 export type { AuthenticatedUser, LoginCredentials } from "./contracts/auth";
+export type { Organization, OrganizationMembership } from "./contracts/organizations";
+export type { CreateProjectPayload, Point, Project } from "./contracts/projects";

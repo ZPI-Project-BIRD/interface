@@ -10,5 +10,5 @@ export function RequireAuth() {
 export function RequireGuest() {
   const user = useAuthStore((state) => state.user);
 
-  return user ? <Navigate to="/map-selection" replace /> : <Outlet />;
+  return user ? <Navigate to="/projects" replace /> : <Outlet />;
 }
