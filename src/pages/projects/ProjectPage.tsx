@@ -13,7 +13,9 @@ interface ProjectDetails {
 async function findProject(projectId: string): Promise<ProjectDetails> {
   const memberships = await api.organizations.getMy();
   const organizations = Array.from(
-    new Map(memberships.map(({ organization }) => [organization.id, organization])).values(),
+    new globalThis.Map<string, Organization>(
+      memberships.map(({ organization }) => [organization.id, organization]),
+    ).values(),
   );
   const groups = await Promise.all(
     organizations.map(async (organization) => ({
