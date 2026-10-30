@@ -145,10 +145,10 @@ function CreateProjectPage() {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(340px,420px)_1fr]">
         <section className="z-10 flex flex-col border border-[#c9d0d5] bg-white p-6 lg:p-8">
-          <Typography.Title level={2} className="!mb-2">
+          <Typography.Title level={2} className="mb-2!">
             Create project
           </Typography.Title>
-          <Typography.Paragraph type="secondary" className="!mb-8">
+          <Typography.Paragraph type="secondary" className="mb-8!">
             Enter the project details, then draw its rectangular area on the map.
           </Typography.Paragraph>
 
@@ -183,7 +183,7 @@ function CreateProjectPage() {
 
             {organizationsQuery.isError && (
               <Alert
-                className="!mb-7"
+                className="mb-7!"
                 type="error"
                 showIcon
                 message="Could not load organizations"
@@ -227,13 +227,13 @@ function CreateProjectPage() {
               )}
             </Flex>
 
-            <Form.Item className="!mt-8 !mb-0">
+            <Form.Item className="mt-8! mb-0!">
               <Button
                 type="primary"
                 htmlType="submit"
                 size="large"
                 block
-                className="!h-11"
+                className="h-11!"
                 disabled={!canSubmit}
                 loading={createProjectMutation.isLoading}
               >
@@ -243,9 +243,9 @@ function CreateProjectPage() {
           </Form>
         </section>
 
-        <section className="relative min-h-[560px] overflow-hidden border border-[#c9d0d5] bg-neutral-200 lg:min-h-[680px]">
+        <section className="relative min-h-140 overflow-hidden border border-[#c9d0d5] bg-neutral-200 lg:min-h-[680px]">
           <Map mode="draw-rectangle" rectangle={rectangle} onRectangleDraw={handleRectangleDraw} />
-          <div className="pointer-events-none absolute top-4 left-1/2 z-[500] -translate-x-1/2 border border-[#aeb8bf] bg-white/95 px-4 py-2">
+          <div className="pointer-events-none absolute top-4 left-1/2 z-500 -translate-x-1/2 border border-[#aeb8bf] bg-white/95 px-4 py-2">
             <Typography.Text className="whitespace-nowrap">
               {rectangle
                 ? "Drag again to replace the selected area"

@@ -5,6 +5,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Result,
   Select,
   Table,
@@ -13,21 +14,26 @@ import {
   message,
   type TableColumnsType,
 } from "antd";
-import { useMutation, useQuery } from "react-query";
+import { useMutation, useQuery, useQueryClient } from "react-query";
 import { Link } from "react-router";
-import { api, type OrganizationUser } from "../../api";
+import {
+  api,
+  type CreateOrganizationUserPayload,
+  type OrganizationUser,
+} from "../../api";
 import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { useAuthStore } from "../../stores/authStore";
 
-interface AddUserFormValues {
-  friendlyName: string;
-  username: string;
-  membershipRole: "VIEWER" | "ANNOTATOR" | "EDITOR";
-}
+type AddUserFormValues = CreateOrganizationUserPayload;
 
 interface AddUserVariables extends AddUserFormValues {
   organizationId: string;
+}
+
+interface RemoveUserVariables {
+  organizationId: string;
+  user: OrganizationUser;
 }
 
 function formatRole(role: string) {
@@ -38,7 +44,7 @@ function formatRole(role: string) {
     .replace(/^./, (letter) => letter.toLocaleUpperCase());
 }
 
-const userColumns: TableColumnsType<OrganizationUser> = [
+const baseUserColumns: TableColumnsType<OrganizationUser> = [
   {
     title: "User",
     key: "user",
@@ -81,6 +87,8 @@ function OrganizationsPage() {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [addUserForm] = Form.useForm<AddUserFormValues>();
   const [messageApi, messageContextHolder] = message.useMessage();
+  const [modalApi, modalContextHolder] = Modal.useModal();
+  const queryClient = useQueryClient();
   const username = useAuthStore((state) => state.user?.username);
   const organizationsQuery = useQuery(
     ["organizations", "owned", username],
@@ -97,18 +105,48 @@ function OrganizationsPage() {
   );
 
   const addUserMutation = useMutation(
-    async (variables: AddUserVariables) => {
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
-      return variables;
-    },
+    ({ organizationId, ...payload }: AddUserVariables) =>
+      api.organizations.createUser(organizationId, payload),
     {
-      onSuccess: ({ username }) => {
-        messageApi.success(`Dummy add-user action completed for ${username}.`);
+      onSuccess: ({ user, password }, { organizationId }) => {
+        queryClient.setQueryData<OrganizationUser[]>(
+          ["organization-users", organizationId],
+          (currentUsers) => [...(currentUsers ?? []), user],
+        );
         setIsAddUserOpen(false);
         addUserForm.resetFields();
+        modalApi.success({
+          title: "User created",
+          content: (
+            <div>
+              <p>{user.friendlyName || user.username} was added to the organization.</p>
+              <p>
+                Temporary password: <Typography.Text code copyable>{password}</Typography.Text>
+              </p>
+            </div>
+          ),
+        });
       },
-      onError: () => {
-        messageApi.error("The dummy add-user action failed.");
+      onError: (error) => {
+        messageApi.error(error instanceof Error ? error.message : "Unable to create the user.");
+      },
+    },
+  );
+
+  const removeUserMutation = useMutation(
+    ({ organizationId, user }: RemoveUserVariables) =>
+      api.organizations.removeUser(organizationId, user.username),
+    {
+      onSuccess: (_, { organizationId, user }) => {
+        queryClient.setQueryData<OrganizationUser[]>(
+          ["organization-users", organizationId],
+          (currentUsers) =>
+            currentUsers?.filter((currentUser) => currentUser.id !== user.id) ?? [],
+        );
+        messageApi.success(`${user.friendlyName || user.username} was removed.`);
+      },
+      onError: (error) => {
+        messageApi.error(error instanceof Error ? error.message : "Unable to remove the user.");
       },
     },
   );
@@ -118,6 +156,48 @@ function OrganizationsPage() {
       addUserMutation.mutate({ ...values, organizationId: selectedOrganizationId });
     }
   };
+
+  const userColumns: TableColumnsType<OrganizationUser> = [
+    ...baseUserColumns,
+    {
+      title: "Actions",
+      key: "actions",
+      align: "right",
+      width: 120,
+      render: (_, user) => {
+        const isOwner = user.membershipRole.includes("OWNER");
+        const isRemoving =
+          removeUserMutation.isLoading && removeUserMutation.variables?.user.id === user.id;
+
+        if (isOwner) {
+          return (
+            <Button danger size="small" disabled title="Organization owners cannot be removed.">
+              Remove
+            </Button>
+          );
+        }
+
+        return (
+          <Popconfirm
+            title="Remove organization user?"
+            description={`Remove ${user.friendlyName || user.username} from this organization?`}
+            okText="Remove"
+            okButtonProps={{ danger: true }}
+            cancelText="Cancel"
+            onConfirm={() => {
+              if (selectedOrganizationId) {
+                removeUserMutation.mutate({ organizationId: selectedOrganizationId, user });
+              }
+            }}
+          >
+            <Button danger size="small" loading={isRemoving}>
+              Remove
+            </Button>
+          </Popconfirm>
+        );
+      },
+    },
+  ];
 
   if (organizationsQuery.isError) {
     return (
@@ -159,6 +239,7 @@ function OrganizationsPage() {
   return (
     <CrudPageLayout>
       {messageContextHolder}
+      {modalContextHolder}
       <CrudPageHeader
         title="Manage organizations"
         actions={
