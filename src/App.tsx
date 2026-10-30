@@ -10,6 +10,7 @@ import CreateProjectPage from "./pages/projects/CreateProjectPage";
 import ProjectsPage from "./pages/projects/ProjectsPage";
 import ProjectPage from "./pages/projects/ProjectPage";
 import OrganizationsPage from "./pages/organizations/OrganizationsPage";
+import AccountPage from "./pages/AccountPage";
 import { useAuthStore } from "./stores/authStore";
 import {
   RequireAuth,
@@ -43,6 +44,7 @@ function App() {
             <Route path="/map-selection" element={<MapSelectionPage />} />
             <Route path="/projects/create" element={<CreateProjectPage />} />
             <Route path="/projects/:projectId" element={<ProjectPage />} />
+            <Route path="/account" element={<AccountPage />} />
             <Route element={<RequireOrganizationOwner />}>
               <Route path="/organizations" element={<OrganizationsPage />} />
             </Route>
