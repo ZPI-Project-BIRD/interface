@@ -37,5 +37,17 @@ export const theme: ThemeConfig = {
       primaryShadow: 'none',
       defaultShadow: 'none',
     },
+    Table: {
+      borderColor: '#e5e7eb',
+      cellFontSize: 14,
+      cellFontSizeMD: 14,
+      cellPaddingBlockMD: 10,
+      cellPaddingInlineMD: 14,
+      headerBg: '#f6f8fa',
+      headerBorderRadius: 4,
+      headerColor: '#4b5563',
+      rowExpandedBg: '#fafbfc',
+      rowHoverBg: '#f8fafc',
+    },
   },
 };

@@ -1,8 +1,19 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Empty, Input, Select, Skeleton, Typography } from "antd";
+import {
+  Alert,
+  Avatar,
+  Button,
+  Empty,
+  Input,
+  Select,
+  Table,
+  Typography,
+  type TableColumnsType,
+} from "antd";
 import { useQuery } from "react-query";
 import { Link } from "react-router";
 import { api, type Organization, type Project } from "../../api";
+import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 
 interface ProjectGroup {
@@ -24,6 +35,54 @@ function calculateAreaKm2(project: Project) {
 
   return earthRadiusKm ** 2 * longitudeSpan * latitudeBand;
 }
+
+const projectColumns: TableColumnsType<Project> = [
+  {
+    title: "Project",
+    dataIndex: "name",
+    key: "name",
+    render: (name: string) => (
+      <div className="flex min-w-0 items-center gap-3">
+        <Avatar shape="square" size={28} className="shrink-0 !bg-[#123f5d] !text-xs">
+          {name.charAt(0).toLocaleUpperCase()}
+        </Avatar>
+        <Typography.Text className="min-w-0 truncate font-medium">{name}</Typography.Text>
+      </div>
+    ),
+  },
+  {
+    title: "Area",
+    key: "area",
+    width: 140,
+    render: (_, project) => `${calculateAreaKm2(project).toFixed(2)} km²`,
+  },
+  {
+    title: "North-west",
+    key: "northWest",
+    width: 260,
+    render: (_, project) =>
+      `${formatCoordinate(project.topLeft.latitude)}, ${formatCoordinate(project.topLeft.longitude)}`,
+  },
+  {
+    title: "Actions",
+    key: "actions",
+    align: "right",
+    width: 120,
+    render: (_, project) => (
+      <Link to={`/projects/${project.id}`}>
+        <Button type="link">Open</Button>
+      </Link>
+    ),
+  },
+];
+
+const organizationColumns: TableColumnsType<ProjectGroup> = [
+  {
+    title: "Organization",
+    key: "organization",
+    render: (_, group) => <Typography.Text strong>{group.organization.name}</Typography.Text>,
+  },
+];
 
 async function getProjects(): Promise<ProjectGroup[]> {
   const memberships = await api.organizations.getMy();
@@ -47,7 +106,6 @@ function ProjectsPage() {
   const [sort, setSort] = useState<"ascending" | "descending">("ascending");
   const projectsQuery = useQuery(["projects"], getProjects);
   const groups = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
-  const projectCount = groups.reduce((total, group) => total + group.projects.length, 0);
   const visibleGroups = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
 
@@ -81,48 +139,42 @@ function ProjectsPage() {
 
   return (
     <CrudPageLayout>
-      <section className="mb-4 flex flex-col gap-4 border border-[#c9d0d5] bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <Typography.Title level={3} className="!mb-0 !text-xl">
-            My projects
-          </Typography.Title>
-          <Typography.Text type="secondary" className="!text-sm">
-            {projectsQuery.isLoading
-              ? "Loading projects…"
-              : `${projectCount} ${projectCount === 1 ? "project" : "projects"} in ${groups.length} ${groups.length === 1 ? "organization" : "organizations"}`}
-          </Typography.Text>
-        </div>
+      <CrudPageHeader
+        title="My projects"
+        actions={
+          <>
+            <Select
+              value={sort}
+              onChange={setSort}
+              className="sm:w-44"
+              options={[
+                { value: "ascending", label: "Projects A–Z" },
+                { value: "descending", label: "Projects Z–A" },
+              ]}
+            />
+            <Input.Search
+              allowClear
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Filter projects…"
+              className="sm:w-64"
+            />
+            {createButton}
+          </>
+        }
+      />
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Select
-            value={sort}
-            onChange={setSort}
-            className="sm:w-44"
-            options={[
-              { value: "ascending", label: "Projects A–Z" },
-              { value: "descending", label: "Projects Z–A" },
-            ]}
-          />
-          <Input.Search
-            allowClear
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Filter projects…"
-            className="sm:w-64"
-          />
-          {createButton}
-        </div>
-      </section>
-
-      <section className="min-h-[520px] border border-[#c9d0d5] bg-white p-5 sm:p-6">
+      <section>
         {projectsQuery.isLoading && (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {[0, 1, 2].map((item) => (
-              <div key={item} className="border border-neutral-200 p-6">
-                <Skeleton active paragraph={{ rows: 3 }} />
-              </div>
-            ))}
-          </div>
+          <Table<ProjectGroup>
+            className="[&_.ant-table-thead>tr>th]:!bg-[#f6f8fa]"
+            columns={organizationColumns}
+            dataSource={[]}
+            loading
+            pagination={false}
+            rowKey={(group) => group.organization.id}
+            size="middle"
+          />
         )}
 
         {projectsQuery.isError && (
@@ -152,59 +204,33 @@ function ProjectsPage() {
         )}
 
         {projectsQuery.isSuccess && groups.length > 0 && visibleGroups.length > 0 && (
-          <div className="space-y-6">
-            {visibleGroups.map(({ organization, projects }) => (
-              <section key={organization.id} className="border border-[#c9d0d5]">
-                <header className="flex items-center justify-between gap-4 border-b border-[#c9d0d5] bg-[#eef2f4] px-5 py-3">
-                  <Typography.Title level={4} className="!m-0 !text-base">
-                    {organization.name}
-                  </Typography.Title>
-                  <Typography.Text type="secondary" className="!text-sm">
-                    {projects.length} {projects.length === 1 ? "project" : "projects"}
-                  </Typography.Text>
-                </header>
-
-                <div className="p-4">
-                  {projects.length === 0 ? (
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="No projects in this organization."
-                    />
-                  ) : (
-                    <div>
-                      {projects.map((project) => (
-                        <article
-                          key={project.id}
-                          className="flex flex-col gap-4 border-b border-[#d9dee2]  py-3 transition-colors duration-150 last:border-b-0 hover:bg-white md:grid md:grid-cols-[minmax(220px,1fr)_120px_minmax(230px,280px)_120px] md:items-center md:gap-5"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="grid size-9 shrink-0 place-items-center bg-[#123f5d] text-sm font-semibold text-white">
-                              {project.name.charAt(0).toLocaleUpperCase()}
-                            </div>
-                            <Typography.Text strong className="min-w-0 truncate !text-base">
-                              {project.name}
-                            </Typography.Text>
-                          </div>
-                          <div className="text-sm text-neutral-800">
-                            <span className="mr-2 text-neutral-500 md:hidden">Area</span>
-                            {calculateAreaKm2(project).toFixed(2)} km²
-                          </div>
-                          <div className="text-sm text-neutral-800">
-                            <span className="mr-2 text-neutral-500 md:hidden">North-west</span>
-                            {formatCoordinate(project.topLeft.latitude)},{" "}
-                            {formatCoordinate(project.topLeft.longitude)}
-                          </div>
-                          <Link to={`/projects/${project.id}`}>
-                            <Button className="w-full">Open</Button>
-                          </Link>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </section>
-            ))}
-          </div>
+          <Table<ProjectGroup>
+            bordered
+            className="[&_.ant-table-thead>tr>th]:!bg-[#f6f8fa]"
+            columns={organizationColumns}
+            dataSource={visibleGroups}
+            expandable={{
+              columnWidth: 44,
+              defaultExpandAllRows: true,
+              expandedRowRender: (group) => (
+                <Table<Project>
+                  showHeader={false}
+                  bordered
+                  className="rounded-none!"
+                  columns={projectColumns}
+                  dataSource={group.projects}
+                  locale={{ emptyText: "No projects in this organization." }}
+                  pagination={false}
+                  rowKey="id"
+                  scroll={{ x: 760 }}
+                  size="middle"
+                />
+              ),
+            }}
+            pagination={false}
+            rowKey={(group) => group.organization.id}
+            size="middle"
+          />
         )}
 
         {projectsQuery.isSuccess && groups.length > 0 && visibleGroups.length === 0 && (
