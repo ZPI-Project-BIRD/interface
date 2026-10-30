@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router";
+import { useQuery } from "react-query";
+import { Link, NavLink } from "react-router";
+import { api } from "../api";
 import logo from "../assets/logo.png";
+import { useAuthStore } from "../stores/authStore";
 
 interface CrudPageLayoutProps {
   children: ReactNode;
@@ -8,6 +11,20 @@ interface CrudPageLayoutProps {
 }
 
 function CrudPageLayout({ children, headerAction }: CrudPageLayoutProps) {
+  const username = useAuthStore((state) => state.user?.username);
+  const ownedOrganizationsQuery = useQuery(
+    ["organizations", "owned", username],
+    () => api.organizations.getOwned(),
+    { enabled: Boolean(username), staleTime: 60_000 },
+  );
+  const canManageOrganizations = (ownedOrganizationsQuery.data?.length ?? 0) > 0;
+  const navigationClassName = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center border-b-2 px-3 text-sm font-medium !text-white no-underline ${
+      isActive
+        ? "border-white bg-white/10"
+        : "border-transparent text-white/75 hover:bg-white/5 hover:text-white"
+    }`;
+
   return (
     <div className="min-h-dvh bg-[#f4f5f6]">
       <header className="border-b-4 border-[#4a8b3a] bg-[#123f5d] text-white">
@@ -22,7 +39,24 @@ function CrudPageLayout({ children, headerAction }: CrudPageLayoutProps) {
             </div>
           </Link>
 
-          {headerAction}
+          <div className="flex min-h-12 self-stretch">
+            <nav className="flex" aria-label="Primary navigation">
+              <NavLink to="/projects" className={navigationClassName}>
+                Projects
+              </NavLink>
+              {canManageOrganizations && (
+                <NavLink to="/organizations" className={navigationClassName}>
+                  Organizations
+                </NavLink>
+              )}
+            </nav>
+
+            {headerAction && (
+              <div className="ml-3 flex items-center border-l border-white/20 pl-3">
+                {headerAction}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

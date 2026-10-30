@@ -9,8 +9,13 @@ import NotFoundPage from "./pages/NotFoundPage";
 import CreateProjectPage from "./pages/projects/CreateProjectPage";
 import ProjectsPage from "./pages/projects/ProjectsPage";
 import ProjectPage from "./pages/projects/ProjectPage";
+import OrganizationsPage from "./pages/organizations/OrganizationsPage";
 import { useAuthStore } from "./stores/authStore";
-import { RequireAuth, RequireGuest } from "./components/AuthRouteGuards";
+import {
+  RequireAuth,
+  RequireGuest,
+  RequireOrganizationOwner,
+} from "./components/AuthRouteGuards";
 
 function App() {
   const initializeAuth = useAuthStore((state) => state.initialize);
@@ -38,6 +43,9 @@ function App() {
             <Route path="/map-selection" element={<MapSelectionPage />} />
             <Route path="/projects/create" element={<CreateProjectPage />} />
             <Route path="/projects/:projectId" element={<ProjectPage />} />
+            <Route element={<RequireOrganizationOwner />}>
+              <Route path="/organizations" element={<OrganizationsPage />} />
+            </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
