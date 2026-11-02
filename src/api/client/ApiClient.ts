@@ -18,7 +18,7 @@ export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
 }
 
-type ApiMethodOptions = Omit<ApiRequestOptions, "body" | "method">;
+export type ApiMethodOptions = Omit<ApiRequestOptions, "body" | "method">;
 type UnauthorizedHandler = () => void;
 
 export class ApiClient {
@@ -27,6 +27,7 @@ export class ApiClient {
   private readonly headers: Headers;
   private readonly csrfPath: string;
   private unauthorizedHandler?: UnauthorizedHandler;
+  private sessionController = new AbortController();
 
   constructor({
     baseUrl,
@@ -64,10 +65,19 @@ export class ApiClient {
     this.unauthorizedHandler = handler;
   }
 
+  resetSession() {
+    this.sessionController.abort(new DOMException("The session changed.", "AbortError"));
+    this.sessionController = new AbortController();
+  }
+
   async request<TResponse>(
     path: string,
     { body, headers, ...options }: ApiRequestOptions = {},
   ): Promise<TResponse> {
+    const signal = options.signal
+      ? AbortSignal.any([this.sessionController.signal, options.signal])
+      : this.sessionController.signal;
+    signal.throwIfAborted();
     const requestHeaders = new Headers(this.headers);
 
     new Headers(headers).forEach((value, key) => {
@@ -83,26 +93,34 @@ export class ApiClient {
     if (UNSAFE_METHODS.has(method)) {
       const csrf = await this.fetchCsrfToken({
         credentials: options.credentials,
-        signal: options.signal,
+        signal,
       });
 
       requestHeaders.set(csrf.headerName, csrf.token);
     }
+
+    signal.throwIfAborted();
 
     let response: Response;
 
     try {
       response = await fetch(this.createUrl(path), {
         ...options,
+        signal,
         credentials: options.credentials ?? this.credentials,
         headers: requestHeaders,
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-    } catch {
+    } catch (error) {
+      signal.throwIfAborted();
+      if (error instanceof Error && error.name === "AbortError") throw error;
       throw new ApiError(0, "Unable to connect to the server.");
     }
 
+    signal.throwIfAborted();
     const responseBody = await this.readResponseBody(response);
+    // Some transports finish despite cancellation. Never accept an old session's body/401.
+    signal.throwIfAborted();
 
     if (!response.ok) {
       if (response.status === 401) {

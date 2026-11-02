@@ -1,4 +1,4 @@
-import type { ApiClient } from "../client/ApiClient";
+import type { ApiClient, ApiMethodOptions } from "../client/ApiClient";
 import type {
   CurrentUser,
   UpdateFullNamePayload,
@@ -12,8 +12,8 @@ export class MeApi {
     this.client = client;
   }
 
-  async get(): Promise<CurrentUser> {
-    return await this.client.get("/me");
+  async get(options?: ApiMethodOptions): Promise<CurrentUser> {
+    return await this.client.get("/me", options);
   }
 
   async updateFullName(payload: UpdateFullNamePayload): Promise<CurrentUser> {

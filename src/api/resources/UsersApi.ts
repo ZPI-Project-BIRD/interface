@@ -1,4 +1,4 @@
-import type { ApiClient } from "../client/ApiClient";
+import type { ApiClient, ApiMethodOptions } from "../client/ApiClient";
 import type { OrganizationUser } from "../contracts/users";
 
 export class UsersApi {
@@ -8,7 +8,7 @@ export class UsersApi {
     this.client = client;
   }
 
-  async getAll(organizationId: string): Promise<OrganizationUser[]> {
-    return await this.client.get(`/organizations/${organizationId}/users`);
+  async getAll(organizationId: string, options?: ApiMethodOptions): Promise<OrganizationUser[]> {
+    return await this.client.get(`/organizations/${organizationId}/users`, options);
   }
 }

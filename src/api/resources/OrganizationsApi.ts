@@ -1,4 +1,4 @@
-import type { ApiClient } from "../client/ApiClient";
+import type { ApiClient, ApiMethodOptions } from "../client/ApiClient";
 import type { Organization, OrganizationMembership } from "../contracts/organizations";
 import type {
   CreateOrganizationUserPayload,
@@ -12,16 +12,16 @@ export class OrganizationsApi {
     this.client = client;
   }
 
-  async getMy(): Promise<OrganizationMembership[]> {
-    return await this.client.get("/organizations/my");
+  async getMy(options?: ApiMethodOptions): Promise<OrganizationMembership[]> {
+    return await this.client.get("/organizations/my", options);
   }
 
-  async getOwned(): Promise<Organization[]> {
-    return await this.client.get("/organizations/owned");
+  async getOwned(options?: ApiMethodOptions): Promise<Organization[]> {
+    return await this.client.get("/organizations/owned", options);
   }
 
-  async getEditable(): Promise<Organization[]> {
-    return await this.client.get("/organizations/editable");
+  async getEditable(options?: ApiMethodOptions): Promise<Organization[]> {
+    return await this.client.get("/organizations/editable", options);
   }
 
   async removeUser(organizationId: string, username: string) {

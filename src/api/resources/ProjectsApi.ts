@@ -1,4 +1,4 @@
-import type { ApiClient } from "../client/ApiClient";
+import type { ApiClient, ApiMethodOptions } from "../client/ApiClient";
 import type { CreateProjectPayload, Project } from "../contracts/projects";
 
 export class ProjectsApi {
@@ -12,7 +12,7 @@ export class ProjectsApi {
     return await this.client.post(`/organizations/${organizationId}/projects`, payload);
   }
 
-  async getAll(organizationId: string): Promise<Project[]> {
-    return await this.client.get(`/organizations/${organizationId}/projects`);
+  async getAll(organizationId: string, options?: ApiMethodOptions): Promise<Project[]> {
+    return await this.client.get(`/organizations/${organizationId}/projects`, options);
   }
 }
