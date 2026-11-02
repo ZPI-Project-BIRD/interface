@@ -5,6 +5,7 @@
     "": {
       "name": "frontend",
       "dependencies": {
+        "@ant-design/icons": "^6.3.4",
         "@tailwindcss/vite": "^4.3.3",
         "antd": "^6.6.6",
         "leaflet": "^1.9.4",

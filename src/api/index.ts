@@ -6,7 +6,7 @@ import { UsersApi } from "./resources/UsersApi";
 import { MeApi } from "./resources/MeApi";
 
 export const apiClient = new ApiClient({
-  baseUrl: import.meta.env.VITE_API_URL ?? "/api",
+  baseUrl: import.meta.env.VITE_API_URL?.trim() || "/api",
   credentials: "include",
 });
 

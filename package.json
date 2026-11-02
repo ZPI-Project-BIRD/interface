@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:api-config": "bun test tests/api-configuration.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.3.4",
     "@tailwindcss/vite": "^4.3.3",
     "antd": "^6.6.6",
     "leaflet": "^1.9.4",
