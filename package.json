@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:api-config": "bun test tests/api-configuration.test.ts",
+    "test:session": "bun test tests/session.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
