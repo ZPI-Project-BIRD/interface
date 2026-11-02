@@ -44,10 +44,15 @@ const MapSelectionPage = () => {
   );
 
   useEffect(() => {
-    (async () => {
-      console.log(await api.organizations.getMy());
-    })();
-  }, []);
+    const controller = new AbortController();
+    void api.organizations.getMy({ signal: controller.signal })
+      .then((organizations) => console.log(organizations))
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === "AbortError") return;
+        messageApi.error(error instanceof Error ? error.message : "Unable to load organizations.");
+      });
+    return () => controller.abort();
+  }, [messageApi]);
 
   return (
     <Layout className="h-screen">

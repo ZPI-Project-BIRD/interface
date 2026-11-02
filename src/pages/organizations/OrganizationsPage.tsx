@@ -23,7 +23,8 @@ import {
 } from "../../api";
 import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
-import { useAuthStore } from "../../stores/authStore";
+import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
+import { privateQueryKey } from "../../queryClient";
 
 type AddUserFormValues = CreateOrganizationUserPayload;
 
@@ -90,27 +91,30 @@ function OrganizationsPage() {
   const [modalApi, modalContextHolder] = Modal.useModal();
   const queryClient = useQueryClient();
   const username = useAuthStore((state) => state.user?.username);
+  const sessionId = useAuthStore((state) => state.sessionId);
   const organizationsQuery = useQuery(
-    ["organizations", "owned", username],
-    () => api.organizations.getOwned(),
+    privateQueryKey(sessionId, "organizations", "owned"),
+    ({ signal }) => api.organizations.getOwned({ signal }),
     { enabled: Boolean(username), staleTime: 60_000 },
   );
 
   const selectedOrganizationId = organizationId ?? organizationsQuery.data?.[0]?.id;
 
   const usersQuery = useQuery(
-    ["organization-users", selectedOrganizationId],
-    () => api.users.getAll(selectedOrganizationId!),
-    { enabled: Boolean(selectedOrganizationId) },
+    privateQueryKey(sessionId, "organization-users", selectedOrganizationId),
+    ({ signal }) => api.users.getAll(selectedOrganizationId!, { signal }),
+    { enabled: Boolean(selectedOrganizationId && username) },
   );
 
   const addUserMutation = useMutation(
     ({ organizationId, ...payload }: AddUserVariables) =>
-      api.organizations.createUser(organizationId, payload),
+      withSession(sessionId, () => api.organizations.createUser(organizationId, payload)),
     {
+      mutationKey: privateQueryKey(sessionId, "create-organization-user"),
       onSuccess: ({ user, password }, { organizationId }) => {
+        if (!isCurrentSession(sessionId)) return;
         queryClient.setQueryData<OrganizationUser[]>(
-          ["organization-users", organizationId],
+          privateQueryKey(sessionId, "organization-users", organizationId),
           (currentUsers) => [...(currentUsers ?? []), user],
         );
         setIsAddUserOpen(false);
@@ -128,6 +132,7 @@ function OrganizationsPage() {
         });
       },
       onError: (error) => {
+        if (!isCurrentSession(sessionId)) return;
         messageApi.error(error instanceof Error ? error.message : "Unable to create the user.");
       },
     },
@@ -135,17 +140,20 @@ function OrganizationsPage() {
 
   const removeUserMutation = useMutation(
     ({ organizationId, user }: RemoveUserVariables) =>
-      api.organizations.removeUser(organizationId, user.username),
+      withSession(sessionId, () => api.organizations.removeUser(organizationId, user.username)),
     {
+      mutationKey: privateQueryKey(sessionId, "remove-organization-user"),
       onSuccess: (_, { organizationId, user }) => {
+        if (!isCurrentSession(sessionId)) return;
         queryClient.setQueryData<OrganizationUser[]>(
-          ["organization-users", organizationId],
+          privateQueryKey(sessionId, "organization-users", organizationId),
           (currentUsers) =>
             currentUsers?.filter((currentUser) => currentUser.id !== user.id) ?? [],
         );
         messageApi.success(`${user.friendlyName || user.username} was removed.`);
       },
       onError: (error) => {
+        if (!isCurrentSession(sessionId)) return;
         messageApi.error(error instanceof Error ? error.message : "Unable to remove the user.");
       },
     },

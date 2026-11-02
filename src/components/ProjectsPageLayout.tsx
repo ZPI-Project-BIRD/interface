@@ -4,6 +4,9 @@ import { Link, NavLink } from "react-router";
 import { api } from "../api";
 import logo from "../assets/logo.png";
 import { useAuthStore } from "../stores/authStore";
+import { Alert, Button } from "antd";
+import { LogoutOutlined } from "@ant-design/icons";
+import { privateQueryKey } from "../queryClient";
 
 interface CrudPageLayoutProps {
   children: ReactNode;
@@ -12,10 +15,15 @@ interface CrudPageLayoutProps {
 
 function CrudPageLayout({ children, headerAction }: CrudPageLayoutProps) {
   const username = useAuthStore((state) => state.user?.username);
+  const sessionId = useAuthStore((state) => state.sessionId);
+  const logout = useAuthStore((state) => state.logout);
+  const loggingOut = useAuthStore((state) => state.loggingOut);
+  const error = useAuthStore((state) => state.error);
+  const clearError = useAuthStore((state) => state.clearError);
   const ownedOrganizationsQuery = useQuery(
-    ["organizations", "owned", username],
-    () => api.organizations.getOwned(),
-    { enabled: Boolean(username), staleTime: 60_000 },
+    privateQueryKey(sessionId, "organizations", "owned"),
+    ({ signal }) => api.organizations.getOwned({ signal }),
+    { enabled: Boolean(username) && !loggingOut, staleTime: 60_000 },
   );
   const canManageOrganizations = (ownedOrganizationsQuery.data?.length ?? 0) > 0;
   const navigationClassName = ({ isActive }: { isActive: boolean }) =>
@@ -54,16 +62,34 @@ function CrudPageLayout({ children, headerAction }: CrudPageLayoutProps) {
               </NavLink>
             </nav>
 
-            {headerAction && (
-              <div className="ml-3 flex items-center border-l border-white/20 pl-3">
-                {headerAction}
-              </div>
-            )}
+            <div className="ml-3 flex items-center gap-3 border-l border-white/20 pl-3">
+              {headerAction}
+              <Button
+                ghost
+                icon={<LogoutOutlined />}
+                loading={loggingOut}
+                onClick={() => { void logout().catch(() => {}); }}
+              >
+                Log out
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-360 p-4 sm:p-6">{children}</main>
+      <main className="mx-auto max-w-360 p-4 sm:p-6">
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            title="Logout failed"
+            description={error}
+            closable
+            onClose={clearError}
+          />
+        )}
+        {children}
+      </main>
     </div>
   );
 }

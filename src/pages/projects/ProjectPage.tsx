@@ -4,14 +4,16 @@ import { Link, useParams } from "react-router";
 import { api, type Organization, type Project } from "../../api";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { Map, type RectangleBounds } from "../../components/Map";
+import { useAuthStore } from "../../stores/authStore";
+import { privateQueryKey } from "../../queryClient";
 
 interface ProjectDetails {
   organization: Organization;
   project: Project;
 }
 
-async function findProject(projectId: string): Promise<ProjectDetails> {
-  const memberships = await api.organizations.getMy();
+async function findProject(projectId: string, signal?: AbortSignal): Promise<ProjectDetails> {
+  const memberships = await api.organizations.getMy({ signal });
   const organizations = Array.from(
     new globalThis.Map<string, Organization>(
       memberships.map(({ organization }) => [organization.id, organization]),
@@ -20,7 +22,7 @@ async function findProject(projectId: string): Promise<ProjectDetails> {
   const groups = await Promise.all(
     organizations.map(async (organization) => ({
       organization,
-      projects: await api.projects.getAll(organization.id),
+      projects: await api.projects.getAll(organization.id, { signal }),
     })),
   );
 
@@ -37,10 +39,12 @@ async function findProject(projectId: string): Promise<ProjectDetails> {
 
 function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const sessionId = useAuthStore((state) => state.sessionId);
+  const username = useAuthStore((state) => state.user?.username);
   const projectQuery = useQuery(
-    ["project", projectId],
-    () => findProject(projectId!),
-    { enabled: Boolean(projectId) },
+    privateQueryKey(sessionId, "project", projectId),
+    ({ signal }) => findProject(projectId!, signal),
+    { enabled: Boolean(projectId && username) },
   );
 
   const backButton = (

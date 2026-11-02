@@ -5,6 +5,8 @@ import { Link, useNavigate } from "react-router";
 import { api, type CreateProjectPayload } from "../../api";
 import { Map, type RectangleBounds } from "../../components/Map";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
+import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
+import { privateQueryKey } from "../../queryClient";
 
 const EARTH_RADIUS_KILOMETERS = 6_371.0088;
 const MAX_RECTANGLE_AREA_KM2 = 20;
@@ -51,9 +53,13 @@ function CreateProjectPage() {
   const navigate = useNavigate();
   const organizationId = Form.useWatch("organizationId", form);
   const projectName = Form.useWatch("name", form);
+  const sessionId = useAuthStore((state) => state.sessionId);
+  const username = useAuthStore((state) => state.user?.username);
 
-  const organizationsQuery = useQuery(["organizations", "editable"], () =>
-    api.organizations.getEditable(),
+  const organizationsQuery = useQuery(
+    privateQueryKey(sessionId, "organizations", "editable"),
+    ({ signal }) => api.organizations.getEditable({ signal }),
+    { enabled: Boolean(username) },
   );
 
   const createProjectMutation = useMutation(
@@ -62,12 +68,17 @@ function CreateProjectPage() {
       name,
       rectangle: selectedRectangle,
     }: CreateProjectVariables) =>
-      api.projects.create(selectedOrganizationId, toCreateProjectPayload(name, selectedRectangle)),
+      withSession(sessionId, () =>
+        api.projects.create(selectedOrganizationId, toCreateProjectPayload(name, selectedRectangle)),
+      ),
     {
+      mutationKey: privateQueryKey(sessionId, "create-project"),
       onSuccess: (project) => {
+        if (!isCurrentSession(sessionId)) return;
         navigate(`/projects/${project.id}`, { replace: true });
       },
       onError: (error) => {
+        if (!isCurrentSession(sessionId)) return;
         messageApi.error(error instanceof Error ? error.message : "Unable to create the project.");
       },
     },

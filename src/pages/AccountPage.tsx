@@ -2,7 +2,8 @@ import { Alert, Button, Form, Input, Spin, Typography, message } from "antd";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { api, type CurrentUser, type UpdatePasswordPayload } from "../api";
 import CrudPageLayout from "../components/ProjectsPageLayout";
-import { useAuthStore } from "../stores/authStore";
+import { isCurrentSession, useAuthStore, withSession } from "../stores/authStore";
+import { privateQueryKey } from "../queryClient";
 
 interface FullNameFormValues {
   fullName: string;
@@ -18,20 +19,26 @@ function AccountPage() {
   const [messageApi, messageContextHolder] = message.useMessage();
   const queryClient = useQueryClient();
   const username = useAuthStore((state) => state.user?.username);
+  const sessionId = useAuthStore((state) => state.sessionId);
+  const accountKey = privateQueryKey(sessionId, "account");
 
-  const currentUserQuery = useQuery(["account", username], () => api.me.get(), {
+  const currentUserQuery = useQuery(accountKey, ({ signal }) => api.me.get({ signal }), {
     enabled: Boolean(username),
   });
 
   const fullNameMutation = useMutation(
-    ({ fullName }: FullNameFormValues) => api.me.updateFullName({ fullName: fullName.trim() }),
+    ({ fullName }: FullNameFormValues) =>
+      withSession(sessionId, () => api.me.updateFullName({ fullName: fullName.trim() })),
     {
+      mutationKey: privateQueryKey(sessionId, "update-full-name"),
       onSuccess: (user) => {
-        queryClient.setQueryData<CurrentUser>(["account", username], user);
+        if (!isCurrentSession(sessionId)) return;
+        queryClient.setQueryData<CurrentUser>(accountKey, user);
         fullNameForm.setFieldsValue({ fullName: user.fullName });
         messageApi.success("Full name updated.");
       },
       onError: (error) => {
+        if (!isCurrentSession(sessionId)) return;
         messageApi.error(error instanceof Error ? error.message : "Unable to update your name.");
       },
     },
@@ -39,13 +46,16 @@ function AccountPage() {
 
   const passwordMutation = useMutation(
     ({ currentPassword, newPassword }: PasswordFormValues) =>
-      api.me.updatePassword({ currentPassword, newPassword }),
+      withSession(sessionId, () => api.me.updatePassword({ currentPassword, newPassword })),
     {
+      mutationKey: privateQueryKey(sessionId, "update-password"),
       onSuccess: () => {
+        if (!isCurrentSession(sessionId)) return;
         passwordForm.resetFields();
         messageApi.success("Password updated.");
       },
       onError: (error) => {
+        if (!isCurrentSession(sessionId)) return;
         messageApi.error(
           error instanceof Error ? error.message : "Unable to update your password.",
         );

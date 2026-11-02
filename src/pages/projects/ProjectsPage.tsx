@@ -15,6 +15,8 @@ import { Link } from "react-router";
 import { api, type Organization, type Project } from "../../api";
 import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
+import { useAuthStore } from "../../stores/authStore";
+import { privateQueryKey } from "../../queryClient";
 
 interface ProjectGroup {
   organization: Organization;
@@ -84,15 +86,15 @@ const organizationColumns: TableColumnsType<ProjectGroup> = [
   },
 ];
 
-async function getProjects(): Promise<ProjectGroup[]> {
-  const memberships = await api.organizations.getMy();
+async function getProjects(signal?: AbortSignal): Promise<ProjectGroup[]> {
+  const memberships = await api.organizations.getMy({ signal });
   const organizations = Array.from(
     new Map(memberships.map(({ organization }) => [organization.id, organization])).values(),
   );
   const groups = await Promise.all(
     organizations.map(async (organization) => ({
       organization,
-      projects: await api.projects.getAll(organization.id),
+      projects: await api.projects.getAll(organization.id, { signal }),
     })),
   );
 
@@ -104,7 +106,13 @@ async function getProjects(): Promise<ProjectGroup[]> {
 function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"ascending" | "descending">("ascending");
-  const projectsQuery = useQuery(["projects"], getProjects);
+  const sessionId = useAuthStore((state) => state.sessionId);
+  const username = useAuthStore((state) => state.user?.username);
+  const projectsQuery = useQuery(
+    privateQueryKey(sessionId, "projects"),
+    ({ signal }) => getProjects(signal),
+    { enabled: Boolean(username) },
+  );
   const groups = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const visibleGroups = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();

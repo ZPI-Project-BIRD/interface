@@ -1,11 +1,25 @@
-import { Button, Flex, Result, Spin } from "antd";
+import { Button, Flex, Result, Spin, Typography } from "antd";
 import { useQuery } from "react-query";
 import { Navigate, Outlet } from "react-router";
 import { api } from "../api";
 import { useAuthStore } from "../stores/authStore";
+import { privateQueryKey } from "../queryClient";
+import CrudPageLayout from "./ProjectsPageLayout";
 
 export function RequireAuth() {
   const user = useAuthStore((state) => state.user);
+  const loggingOut = useAuthStore((state) => state.loggingOut);
+
+  if (loggingOut) {
+    return (
+      <CrudPageLayout>
+        <Flex vertical align="center" gap="middle">
+          <Spin />
+          <Typography.Text>Signing out…</Typography.Text>
+        </Flex>
+      </CrudPageLayout>
+    );
+  }
 
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 }
@@ -18,9 +32,10 @@ export function RequireGuest() {
 
 export function RequireOrganizationOwner() {
   const username = useAuthStore((state) => state.user?.username);
+  const sessionId = useAuthStore((state) => state.sessionId);
   const ownedOrganizationsQuery = useQuery(
-    ["organizations", "owned", username],
-    () => api.organizations.getOwned(),
+    privateQueryKey(sessionId, "organizations", "owned"),
+    ({ signal }) => api.organizations.getOwned({ signal }),
     { enabled: Boolean(username), staleTime: 60_000 },
   );
 
