@@ -88,8 +88,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     logout: async () => {
-      if (get().loading) return;
-      // Hide private pages and cancel their work before sending the logout request.
+      if (get().loading) return; // hide private pages and stop work before login request
       replaceSession(get().user, true);
       const attempt = get().sessionId;
       try {
@@ -101,7 +100,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
           replaceSession(null);
           return;
         }
-        // Keep the identity on failure, but reload its data into the fresh cache.
+        // keep identity but hide private pages and stop work before login request
         set({ loading: false, loggingOut: false, error: getErrorMessage(error, "Unable to log out.") });
         throw error;
       }
@@ -114,8 +113,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
 apiClient.setUnauthorizedHandler(() => {
   const state = useAuthStore.getState();
-  // A 401 on initial session discovery or invalid login is not an expiry notice.
-  // During intentional logout, a 401 already means the session has ended.
   if (state.user && !state.loggingOut) state.clearSession(true);
 });
 
