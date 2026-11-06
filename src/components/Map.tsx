@@ -96,12 +96,11 @@ interface MapProps {
   mode: MapMode;
   rectangle: RectangleBounds | null;
   interactive?: boolean;
-  /** Fixed base layer. When omitted, the map starts on satellite and shows a layer switcher. */
   layer?: MapLayer;
   polygons?: MapPolygon[];
-  /** The map zooms to these bounds whenever they change. */
   focusBounds?: L.LatLngBounds | null;
   onRectangleDraw?: (rectangle: RectangleBounds) => void;
+  onDrawingChange?: (drawing: boolean) => void;
 }
 
 export function Map({
@@ -112,6 +111,7 @@ export function Map({
   polygons,
   focusBounds,
   onRectangleDraw,
+  onDrawingChange,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -174,7 +174,11 @@ export function Map({
 
     if (layer === undefined) {
       L.control
-        .layers(Object.fromEntries(baseLayers.map(([key, baseLayer]) => [MAP_LAYERS[key].label, baseLayer])))
+        .layers(
+          Object.fromEntries(
+            baseLayers.map(([key, baseLayer]) => [MAP_LAYERS[key].label, baseLayer]),
+          ),
+        )
         .addTo(map);
     }
 
@@ -207,15 +211,12 @@ export function Map({
       [rectangle.south, rectangle.west],
       [rectangle.north, rectangle.east],
     );
-    const layer = L.rectangle(
-      bounds,
-      {
-        color: "#4ab72b",
-        fillOpacity: 0.15,
-        interactive: false,
-        weight: 2,
-      },
-    ).addTo(map);
+    const layer = L.rectangle(bounds, {
+      color: "#4ab72b",
+      fillOpacity: 0.15,
+      interactive: false,
+      weight: 2,
+    }).addTo(map);
 
     if (!interactive || mode === "browse") {
       map.fitBounds(bounds, { animate: false, maxZoom: 16, padding: [40, 40] });
@@ -259,6 +260,15 @@ export function Map({
     }
   }, [focusBounds]);
 
+  // Kept in refs so a new callback identity does not reset a selection in progress.
+  const onRectangleDrawRef = useRef(onRectangleDraw);
+  const onDrawingChangeRef = useRef(onDrawingChange);
+
+  useEffect(() => {
+    onRectangleDrawRef.current = onRectangleDraw;
+    onDrawingChangeRef.current = onDrawingChange;
+  });
+
   useEffect(
     function drawRectangleEffect() {
       const map = mapRef.current;
@@ -267,58 +277,55 @@ export function Map({
         return;
       }
 
+      // Dragging pans the map; a click anchors the first corner and a second click the opposite
+      // one. Leaflet does not fire "click" after a drag, so panning never places a corner.
       const container = map.getContainer();
       const previousCursor = container.style.cursor;
-      const wasDraggingEnabled = map.dragging.enabled();
+      const wasDoubleClickZoomEnabled = map.doubleClickZoom.enabled();
       let startPoint: L.LatLng | null = null;
       let draftLayer: L.Rectangle | null = null;
 
       container.style.cursor = "crosshair";
-      map.dragging.disable();
+      // Two quick clicks are a selection, not a zoom request.
+      map.doubleClickZoom.disable();
 
-      const handleMouseDown = (event: L.LeafletMouseEvent) => {
-        if (event.originalEvent.button !== 0) {
-          return;
-        }
+      const setStart = (point: L.LatLng | null) => {
+        startPoint = point;
+        onDrawingChangeRef.current?.(point !== null);
+      };
 
-        L.DomEvent.preventDefault(event.originalEvent);
-        startPoint = event.latlng;
+      const cancel = () => {
         draftLayer?.remove();
-        draftLayer = L.rectangle(L.latLngBounds(startPoint, startPoint), {
-          color: "#4ab72b",
-          dashArray: "6 4",
-          fillOpacity: 0.15,
-          interactive: false,
-          weight: 2,
-        }).addTo(map);
-      };
+        draftLayer = null;
 
-      const handleMouseMove = (event: L.LeafletMouseEvent) => {
-        if (!startPoint || !draftLayer) {
-          return;
+        if (startPoint) {
+          setStart(null);
         }
-
-        draftLayer.setBounds(L.latLngBounds(startPoint, event.latlng));
       };
 
-      const handleMouseUp = (event: L.LeafletMouseEvent) => {
+      const handleClick = (event: L.LeafletMouseEvent) => {
         if (!startPoint) {
+          setStart(event.latlng);
+          draftLayer = L.rectangle(L.latLngBounds(event.latlng, event.latlng), {
+            color: "#4ab72b",
+            dashArray: "6 4",
+            fillOpacity: 0.15,
+            interactive: false,
+            weight: 2,
+          }).addTo(map);
           return;
         }
 
         const startContainerPoint = map.latLngToContainerPoint(startPoint);
-        const endContainerPoint = map.latLngToContainerPoint(event.latlng);
-        const bounds = L.latLngBounds(startPoint, event.latlng);
 
-        draftLayer?.remove();
-        draftLayer = null;
-        startPoint = null;
-
-        if (startContainerPoint.distanceTo(endContainerPoint) < 3) {
+        // A second click on (almost) the same spot would make an empty rectangle; keep drawing.
+        if (startContainerPoint.distanceTo(event.containerPoint) < 3) {
           return;
         }
 
-        onRectangleDraw?.({
+        const bounds = L.latLngBounds(startPoint, event.latlng);
+        cancel();
+        onRectangleDrawRef.current?.({
           north: bounds.getNorth(),
           east: bounds.getEast(),
           south: bounds.getSouth(),
@@ -326,23 +333,44 @@ export function Map({
         });
       };
 
-      map.on("mousedown", handleMouseDown);
+      const handleMouseMove = (event: L.LeafletMouseEvent) => {
+        if (startPoint && draftLayer) {
+          draftLayer.setBounds(L.latLngBounds(startPoint, event.latlng));
+        }
+      };
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          cancel();
+        }
+      };
+
+      const handleContextMenu = (event: L.LeafletMouseEvent) => {
+        if (startPoint) {
+          L.DomEvent.preventDefault(event.originalEvent);
+          cancel();
+        }
+      };
+
+      map.on("click", handleClick);
       map.on("mousemove", handleMouseMove);
-      map.on("mouseup", handleMouseUp);
+      map.on("contextmenu", handleContextMenu);
+      document.addEventListener("keydown", handleKeyDown);
 
       return () => {
-        map.off("mousedown", handleMouseDown);
+        map.off("click", handleClick);
         map.off("mousemove", handleMouseMove);
-        map.off("mouseup", handleMouseUp);
-        draftLayer?.remove();
+        map.off("contextmenu", handleContextMenu);
+        document.removeEventListener("keydown", handleKeyDown);
+        cancel();
         container.style.cursor = previousCursor;
 
-        if (wasDraggingEnabled) {
-          map.dragging.enable();
+        if (wasDoubleClickZoomEnabled) {
+          map.doubleClickZoom.enable();
         }
       };
     },
-    [interactive, mode, onRectangleDraw],
+    [interactive, mode],
   );
 
   return <div ref={containerRef} className="h-full w-full" />;

@@ -17,15 +17,12 @@ import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { useAuthStore } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
-import { calculateAreaKm2 } from "../../geo/area";
+import { ProjectStatus } from "../../components/project/ProjectStatus";
+import { PolandMiniMap } from "../../components/project/PolandMiniMap";
 
 interface ProjectGroup {
   organization: Organization;
   projects: Project[];
-}
-
-function formatCoordinate(value: number) {
-  return value.toFixed(5);
 }
 
 const projectColumns: TableColumnsType<Project> = [
@@ -33,27 +30,23 @@ const projectColumns: TableColumnsType<Project> = [
     title: "Project",
     dataIndex: "name",
     key: "name",
-    render: (name: string) => (
+    render: (name: string, project) => (
       <div className="flex min-w-0 items-center gap-3">
         <Avatar shape="square" size={28} className="shrink-0 !bg-[#123f5d] !text-xs">
           {name.charAt(0).toLocaleUpperCase()}
         </Avatar>
-        <Typography.Text className="min-w-0 truncate font-medium">{name}</Typography.Text>
+        <div className="flex min-w-0 flex-col">
+          <Typography.Text className="min-w-0 truncate font-medium">{name}</Typography.Text>
+          <ProjectStatus project={project} />
+        </div>
       </div>
     ),
   },
   {
-    title: "Area",
-    key: "area",
-    width: 140,
-    render: (_, project) => `${calculateAreaKm2(project).toFixed(2)} km²`,
-  },
-  {
-    title: "North-west",
-    key: "northWest",
-    width: 260,
-    render: (_, project) =>
-      `${formatCoordinate(project.topLeft.latitude)}, ${formatCoordinate(project.topLeft.longitude)}`,
+    title: "Location",
+    key: "location",
+    width: 96,
+    render: (_, project) => <PolandMiniMap project={project} />,
   },
   {
     title: "Actions",
