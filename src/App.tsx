@@ -43,7 +43,7 @@ function App() {
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/map-selection" element={<MapSelectionPage />} />
             <Route path="/projects/create" element={<CreateProjectPage />} />
-            <Route path="/projects/:projectId" element={<ProjectPage />} />
+            <Route path="/projects/:organizationId/:projectId" element={<ProjectPage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route element={<RequireOrganizationOwner />}>
               <Route path="/organizations" element={<OrganizationsPage />} />

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "proj4leaflet";
+import { CRS_2180 } from "../geo/projections";
 
 const HIGH_RESOLUTION_ERROR_TILE_URL =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='100%25' height='100%25' fill='%23ef4444' fill-opacity='.35'/%3E%3C/svg%3E";
@@ -16,7 +16,74 @@ const POLAND_BOUNDS = L.latLngBounds(
 const PWR_B4_CENTER = L.latLng(51.108316, 17.065122);
 const INITIAL_ZOOM = 10;
 
+const TILE_OPTIONS = { tileSize: 512, minZoom: 5, maxZoom: 16 } satisfies L.TileLayerOptions;
+const GEOPORTAL_ATTRIBUTION =
+  '&copy; <a href="https://www.geoportal.gov.pl">GUGiK / Geoportal.gov.pl</a>';
+
+function orthophotoUrl(resolution: "StandardResolution" | "HighResolution") {
+  return (
+    `https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/${resolution}` +
+    "?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0" +
+    "&LAYER=ORTOFOTOMAPA&STYLE=default&FORMAT=image/jpeg" +
+    "&TILEMATRIXSET=EPSG:2180&TILEMATRIX=EPSG:2180:{z}" +
+    "&TILEROW={y}&TILECOL={x}"
+  );
+}
+
+function createSatelliteLayer() {
+  const standardResolutionLayer = L.tileLayer(orthophotoUrl("StandardResolution"), {
+    ...TILE_OPTIONS,
+    pane: "standardTiles",
+    attribution: GEOPORTAL_ATTRIBUTION,
+  });
+
+  const highResolutionLayer = L.tileLayer(orthophotoUrl("HighResolution"), {
+    ...TILE_OPTIONS,
+    pane: "highResolutionTiles",
+    errorTileUrl: HIGH_RESOLUTION_ERROR_TILE_URL,
+  });
+
+  highResolutionLayer.on("tileerror", ({ tile }: L.TileErrorEvent) => {
+    tile.style.backgroundColor = "rgb(239 68 68 / 35%)";
+  });
+
+  return L.layerGroup([standardResolutionLayer, highResolutionLayer]);
+}
+
+// G2_MOBILE_500 is Geoportal's OSM-like base map. Its tile grid matches the map CRS
+// exactly, but it stops at zoom 15, so zoom 16 upscales those tiles.
+function createAdministrativeLayer() {
+  return L.tileLayer(
+    "https://mapy.geoportal.gov.pl/wss/service/WMTS/guest/wmts/G2_MOBILE_500" +
+      "?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0" +
+      "&LAYER=G2_MOBILE_500&STYLE=default&FORMAT=image/png" +
+      "&TILEMATRIXSET=EPSG:2180&TILEMATRIX=EPSG:2180:{z}" +
+      "&TILEROW={y}&TILECOL={x}",
+    {
+      ...TILE_OPTIONS,
+      pane: "standardTiles",
+      maxNativeZoom: 15,
+      attribution: GEOPORTAL_ATTRIBUTION,
+    },
+  );
+}
+
+const MAP_LAYERS = {
+  satellite: { label: "Satellite", create: createSatelliteLayer },
+  administrative: { label: "Administrative", create: createAdministrativeLayer },
+} satisfies Record<string, { label: string; create: () => L.Layer }>;
+
+export type MapLayer = keyof typeof MAP_LAYERS;
+const DEFAULT_MAP_LAYER: MapLayer = "satellite";
+
 export type MapMode = "browse" | "draw-rectangle";
+
+export interface MapPolygon {
+  id: string;
+  /** Outer ring first, then holes. */
+  rings: L.LatLng[][];
+  highlighted?: boolean;
+}
 
 export interface RectangleBounds {
   north: number;
@@ -29,10 +96,23 @@ interface MapProps {
   mode: MapMode;
   rectangle: RectangleBounds | null;
   interactive?: boolean;
+  /** Fixed base layer. When omitted, the map starts on satellite and shows a layer switcher. */
+  layer?: MapLayer;
+  polygons?: MapPolygon[];
+  /** The map zooms to these bounds whenever they change. */
+  focusBounds?: L.LatLngBounds | null;
   onRectangleDraw?: (rectangle: RectangleBounds) => void;
 }
 
-export function Map({ mode, rectangle, interactive = true, onRectangleDraw }: MapProps) {
+export function Map({
+  mode,
+  rectangle,
+  interactive = true,
+  layer,
+  polygons,
+  focusBounds,
+  onRectangleDraw,
+}: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -43,24 +123,8 @@ export function Map({ mode, rectangle, interactive = true, onRectangleDraw }: Ma
       return;
     }
 
-    const scaleDen = [
-      30238155.714285716, 15119077.857142858, 7559538.928571429, 3779769.4642857146,
-      1889884.7321428573, 944942.3660714286, 472471.1830357143, 236235.59151785716,
-      94494.23660714286, 47247.11830357143, 23623.559151785714, 9449.423660714287,
-      4724.711830357143, 1889.8847321428573, 944.9423660714286, 472.4711830357143,
-      236.23559151785716,
-    ];
-
-    const resolutions = scaleDen.map((s) => s * 0.00028);
-
-    const crs2180 = new L.Proj.CRS(
-      "EPSG:2180",
-      "+proj=tmerc +lat_0=0 +lon_0=19 +k=0.9993 +x_0=500000 +y_0=-5300000 +ellps=GRS80 +units=m +no_defs",
-      { resolutions: resolutions, origin: [100000, 850000] },
-    );
-
     const map = L.map(container, {
-      crs: crs2180,
+      crs: CRS_2180,
       minZoom: 5,
       maxZoom: 16,
       maxBounds: POLAND_BOUNDS,
@@ -77,7 +141,7 @@ export function Map({ mode, rectangle, interactive = true, onRectangleDraw }: Ma
 
     let isMounted = true;
 
-    if (interactive && navigator.geolocation) {
+    if (interactive && mode === "draw-rectangle" && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
           if (isMounted) {
@@ -103,42 +167,16 @@ export function Map({ mode, rectangle, interactive = true, onRectangleDraw }: Ma
     const highResolutionTilesPane = map.createPane("highResolutionTiles");
     highResolutionTilesPane.style.zIndex = "250";
 
-    L.tileLayer(
-      "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution" +
-        "?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0" +
-        "&LAYER=ORTOFOTOMAPA&STYLE=default&FORMAT=image/jpeg" +
-        "&TILEMATRIXSET=EPSG:2180&TILEMATRIX=EPSG:2180:{z}" +
-        "&TILEROW={y}&TILECOL={x}",
-      {
-        pane: "standardTiles",
-        tileSize: 512,
-        minZoom: 5,
-        maxZoom: 16,
-        attribution: '&copy; <a href="https://www.geoportal.gov.pl">GUGiK / Geoportal.gov.pl</a>',
-      },
-    ).addTo(map);
+    const layerKeys = Object.keys(MAP_LAYERS) as MapLayer[];
+    const baseLayers = layerKeys.map((key) => [key, MAP_LAYERS[key].create()] as const);
 
-    const highResolutionLayer = L.tileLayer(
-      "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/HighResolution" +
-        "?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0" +
-        "&LAYER=ORTOFOTOMAPA&STYLE=default&FORMAT=image/jpeg" +
-        "&TILEMATRIXSET=EPSG:2180&TILEMATRIX=EPSG:2180:{z}" +
-        "&TILEROW={y}&TILECOL={x}",
-      {
-        pane: "highResolutionTiles",
-        opacity: 1,
-        tileSize: 512,
-        minZoom: 5,
-        maxZoom: 16,
-        errorTileUrl: HIGH_RESOLUTION_ERROR_TILE_URL,
-      },
-    );
+    baseLayers.find(([key]) => key === (layer ?? DEFAULT_MAP_LAYER))?.[1].addTo(map);
 
-    highResolutionLayer.on("tileerror", ({ tile }: L.TileErrorEvent) => {
-      tile.style.backgroundColor = "rgb(239 68 68 / 35%)";
-    });
-
-    highResolutionLayer.addTo(map);
+    if (layer === undefined) {
+      L.control
+        .layers(Object.fromEntries(baseLayers.map(([key, baseLayer]) => [MAP_LAYERS[key].label, baseLayer])))
+        .addTo(map);
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       map.invalidateSize({ animate: false, pan: false });
@@ -156,7 +194,7 @@ export function Map({ mode, rectangle, interactive = true, onRectangleDraw }: Ma
       map.remove();
       mapRef.current = null;
     };
-  }, [interactive]);
+  }, [interactive, layer, mode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -179,14 +217,47 @@ export function Map({ mode, rectangle, interactive = true, onRectangleDraw }: Ma
       },
     ).addTo(map);
 
-    if (!interactive) {
+    if (!interactive || mode === "browse") {
       map.fitBounds(bounds, { animate: false, maxZoom: 16, padding: [40, 40] });
     }
 
     return () => {
       layer.remove();
     };
-  }, [interactive, rectangle]);
+  }, [interactive, mode, rectangle]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map || !polygons?.length) {
+      return;
+    }
+
+    const renderer = L.canvas({ padding: 0.5 });
+    const layer = L.layerGroup(
+      polygons.map(({ rings, highlighted }) =>
+        L.polygon(rings, {
+          renderer,
+          interactive: false,
+          color: highlighted ? "#22d3ee" : "#f59e0b",
+          fillOpacity: highlighted ? 0.45 : 0.25,
+          weight: highlighted ? 2 : 1.5,
+        }),
+      ),
+    ).addTo(map);
+
+    return () => {
+      layer.remove();
+    };
+  }, [polygons]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (map && focusBounds?.isValid()) {
+      map.fitBounds(focusBounds, { maxZoom: 16, padding: [40, 40] });
+    }
+  }, [focusBounds]);
 
   useEffect(
     function drawRectangleEffect() {

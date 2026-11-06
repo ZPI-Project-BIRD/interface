@@ -75,7 +75,7 @@ function CreateProjectPage() {
       mutationKey: privateQueryKey(sessionId, "create-project"),
       onSuccess: (project) => {
         if (!isCurrentSession(sessionId)) return;
-        navigate(`/projects/${project.id}`, { replace: true });
+        navigate(`/projects/${project.organizationId}/${project.id}`, { replace: true });
       },
       onError: (error) => {
         if (!isCurrentSession(sessionId)) return;
