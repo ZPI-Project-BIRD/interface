@@ -17,6 +17,7 @@ import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { useAuthStore } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
+import { calculateAreaKm2 } from "../../geo/area";
 
 interface ProjectGroup {
   organization: Organization;
@@ -25,17 +26,6 @@ interface ProjectGroup {
 
 function formatCoordinate(value: number) {
   return value.toFixed(5);
-}
-
-function calculateAreaKm2(project: Project) {
-  const earthRadiusKm = 6_371.0088;
-  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-  const longitudeSpan = toRadians(project.bottomRight.longitude - project.topLeft.longitude);
-  const latitudeBand =
-    Math.sin(toRadians(project.topLeft.latitude)) -
-    Math.sin(toRadians(project.bottomRight.latitude));
-
-  return earthRadiusKm ** 2 * longitudeSpan * latitudeBand;
 }
 
 const projectColumns: TableColumnsType<Project> = [
@@ -71,7 +61,7 @@ const projectColumns: TableColumnsType<Project> = [
     align: "right",
     width: 120,
     render: (_, project) => (
-      <Link to={`/projects/${project.id}`}>
+      <Link to={`/projects/${project.organizationId}/${project.id}`}>
         <Button type="link">Open</Button>
       </Link>
     ),

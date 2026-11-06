@@ -9,7 +9,7 @@
         "@tailwindcss/vite": "^4.3.3",
         "antd": "^6.6.6",
         "leaflet": "^1.9.4",
-        "proj4": "^2.22.0",
+        "proj4": "2.22.0",
         "proj4leaflet": "^1.0.2",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",

@@ -1,50 +1,137 @@
+import { useMemo, useState, type ReactNode } from "react";
 import { Button, Flex, Result, Spin, Typography } from "antd";
+import * as L from "leaflet";
 import { useQuery } from "react-query";
 import { Link, useParams } from "react-router";
-import { api, type Organization, type Project } from "../../api";
+import { api, type FeatureDetections, type Organization, type Project } from "../../api";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
-import { Map, type RectangleBounds } from "../../components/Map";
+import { Map, type MapPolygon, type RectangleBounds } from "../../components/Map";
+import { ProjectProgressCard } from "../../components/project/ProjectProgressCard";
+import { DetectionList, type SheetDetections } from "../../components/project/DetectionList";
+import { calculateAreaKm2 } from "../../geo/area";
+import { planarToLatLng, polygonAreaM2 } from "../../geo/projections";
 import { useAuthStore } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
+
+const PROGRESS_REFRESH_SECONDS = 10;
+const DETECTIONS_REFRESH_SECONDS = 30;
 
 interface ProjectDetails {
   organization: Organization;
   project: Project;
 }
 
-async function findProject(projectId: string, signal?: AbortSignal): Promise<ProjectDetails> {
-  const memberships = await api.organizations.getMy({ signal });
-  const organizations = Array.from(
-    new globalThis.Map<string, Organization>(
-      memberships.map(({ organization }) => [organization.id, organization]),
-    ).values(),
-  );
-  const groups = await Promise.all(
-    organizations.map(async (organization) => ({
-      organization,
-      projects: await api.projects.getAll(organization.id, { signal }),
-    })),
-  );
+interface SheetGeometry extends SheetDetections {
+  /** Building polygons as Leaflet rings (outer ring first). */
+  polygons: L.LatLng[][][];
+}
 
-  for (const group of groups) {
-    const project = group.projects.find((candidate) => candidate.id === projectId);
+async function findProject(
+  organizationId: string,
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<ProjectDetails> {
+  const [memberships, project] = await Promise.all([
+    api.organizations.getMy({ signal }),
+    api.projects.findById(organizationId, projectId, { signal }),
+  ]);
+  const organization = memberships.find(
+    (membership) => membership.organization.id === organizationId,
+  )?.organization;
 
-    if (project) {
-      return { organization: group.organization, project };
-    }
+  if (!organization) {
+    throw new Error("The project does not exist or you do not have permission to view it.");
   }
 
-  throw new Error("The project does not exist or you do not have permission to view it.");
+  return { organization, project };
+}
+
+function toSheetGeometry({ featureId, detections }: FeatureDetections): SheetGeometry {
+  const polygons = detections.flatMap((detection) => detection.bounds ?? []);
+
+  return {
+    featureId,
+    buildingCount: polygons.length,
+    footprintAreaM2: polygons.reduce((sum, polygon) => sum + polygonAreaM2(polygon), 0),
+    polygons: polygons.map((rings) =>
+      rings.map((ring) => ring.map(planarToLatLng).filter((point) => point !== null)),
+    ),
+  };
+}
+
+function formatPoint(latitude: number, longitude: number) {
+  return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+}
+
+function InfoRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3 py-1.5 text-sm">
+      <dt className="text-neutral-500">{label}</dt>
+      <dd className="m-0 text-right tabular-nums">{children}</dd>
+    </div>
+  );
 }
 
 function ProjectPage() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { organizationId, projectId } = useParams<{ organizationId: string; projectId: string }>();
   const sessionId = useAuthStore((state) => state.sessionId);
   const username = useAuthStore((state) => state.user?.username);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const enabled = Boolean(organizationId && projectId && username);
   const projectQuery = useQuery(
-    privateQueryKey(sessionId, "project", projectId),
-    ({ signal }) => findProject(projectId!, signal),
-    { enabled: Boolean(projectId && username) },
+    privateQueryKey(sessionId, "project", organizationId, projectId),
+    ({ signal }) => findProject(organizationId!, projectId!, signal),
+    { enabled },
+  );
+  const projectLoaded = enabled && projectQuery.isSuccess;
+  const progressQuery = useQuery(
+    privateQueryKey(sessionId, "project-progress", organizationId, projectId),
+    ({ signal }) => api.projects.getProgress(organizationId!, projectId!, { signal }),
+    { enabled: projectLoaded, refetchInterval: PROGRESS_REFRESH_SECONDS * 1000 },
+  );
+  const detectionsQuery = useQuery(
+    privateQueryKey(sessionId, "project-detections", organizationId, projectId),
+    ({ signal }) => api.projects.getDetections(organizationId!, projectId!, { signal }),
+    { enabled: projectLoaded, refetchInterval: DETECTIONS_REFRESH_SECONDS * 1000 },
+  );
+
+  const project = projectQuery.data?.project;
+  const rectangle = useMemo<RectangleBounds | null>(
+    () =>
+      project
+        ? {
+            north: project.topLeft.latitude,
+            east: project.bottomRight.longitude,
+            south: project.bottomRight.latitude,
+            west: project.topLeft.longitude,
+          }
+        : null,
+    [project],
+  );
+  const sheets = useMemo(
+    () =>
+      detectionsQuery.data
+        ?.map(toSheetGeometry)
+        .filter((sheet) => sheet.buildingCount > 0)
+        .toSorted((left, right) => right.buildingCount - left.buildingCount),
+    [detectionsQuery.data],
+  );
+  const mapPolygons = useMemo<MapPolygon[]>(
+    () =>
+      sheets?.flatMap((sheet) =>
+        sheet.polygons.map((rings, index) => ({
+          id: `${sheet.featureId}:${index}`,
+          rings,
+          highlighted: sheet.featureId === selectedFeatureId,
+        })),
+      ) ?? [],
+    [sheets, selectedFeatureId],
+  );
+  const selectedSheet = sheets?.find((sheet) => sheet.featureId === selectedFeatureId);
+  const focusBounds = useMemo(
+    () =>
+      selectedSheet ? L.latLngBounds(selectedSheet.polygons.flatMap(([outer]) => outer)) : null,
+    [selectedSheet],
   );
 
   const backButton = (
@@ -53,7 +140,7 @@ function ProjectPage() {
     </Link>
   );
 
-  if (projectQuery.isLoading || !projectId) {
+  if (projectQuery.isLoading || !organizationId || !projectId) {
     return (
       <CrudPageLayout headerAction={backButton}>
         <Flex align="center" justify="center" className="min-h-[520px] border border-[#c9d0d5] bg-white">
@@ -82,28 +169,55 @@ function ProjectPage() {
     );
   }
 
-  const { organization, project } = projectQuery.data;
-  const rectangle: RectangleBounds = {
-    north: project.topLeft.latitude,
-    east: project.bottomRight.longitude,
-    south: project.bottomRight.latitude,
-    west: project.topLeft.longitude,
-  };
+  const { organization } = projectQuery.data;
+  const { topLeft, bottomRight } = projectQuery.data.project;
 
   return (
-    <CrudPageLayout headerAction={backButton}>
-      <section className="mb-4 border border-[#c9d0d5] bg-white px-5 py-4">
-        <Typography.Text className="!text-xs !font-semibold !tracking-[0.1em] !text-[#376f31] uppercase">
-          {organization.name}
-        </Typography.Text>
-        <Typography.Title level={2} className="!mt-1 !mb-0 !text-2xl">
-          {project.name}
-        </Typography.Title>
-      </section>
+    <CrudPageLayout headerAction={backButton} fullBleed>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <aside className="flex shrink-0 flex-col gap-3 overflow-y-auto border-[#c9d0d5] bg-[#f4f5f6] p-4 max-lg:max-h-[50dvh] max-lg:border-b lg:w-96 lg:border-r">
+          <header>
+            <Typography.Text className="!text-xs !font-semibold !tracking-[0.1em] !text-[#376f31] uppercase">
+              {organization.name}
+            </Typography.Text>
+            <Typography.Title level={2} className="!mt-1 !mb-0 !text-2xl">
+              {projectQuery.data.project.name}
+            </Typography.Title>
+          </header>
 
-      <section className="h-[calc(100dvh-190px)] min-h-[560px] overflow-hidden border border-[#c9d0d5] bg-neutral-200">
-        <Map mode="browse" rectangle={rectangle} interactive={false} />
-      </section>
+          <ProjectProgressCard
+            progress={progressQuery.data}
+            isLoading={progressQuery.isLoading}
+            isError={progressQuery.isError}
+            updatedAt={progressQuery.dataUpdatedAt || undefined}
+            refreshSeconds={PROGRESS_REFRESH_SECONDS}
+          />
+
+          <section className="border border-[#c9d0d5] bg-white px-4 py-2">
+            <dl className="m-0 divide-y divide-[#e3e7ea]">
+              <InfoRow label="Area">{calculateAreaKm2(projectQuery.data.project).toFixed(2)} km²</InfoRow>
+              <InfoRow label="North-west corner">
+                {formatPoint(topLeft.latitude, topLeft.longitude)}
+              </InfoRow>
+              <InfoRow label="South-east corner">
+                {formatPoint(bottomRight.latitude, bottomRight.longitude)}
+              </InfoRow>
+            </dl>
+          </section>
+
+          <DetectionList
+            sheets={sheets}
+            isLoading={detectionsQuery.isLoading}
+            isError={detectionsQuery.isError}
+            selectedFeatureId={selectedFeatureId}
+            onSelect={setSelectedFeatureId}
+          />
+        </aside>
+
+        <section className="min-h-[360px] flex-1 bg-neutral-200">
+          <Map mode="browse" rectangle={rectangle} polygons={mapPolygons} focusBounds={focusBounds} />
+        </section>
+      </div>
     </CrudPageLayout>
   );
 }

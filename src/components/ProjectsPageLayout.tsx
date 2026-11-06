@@ -11,9 +11,11 @@ import { privateQueryKey } from "../queryClient";
 interface CrudPageLayoutProps {
   children: ReactNode;
   headerAction?: ReactNode;
+  /** Fill the rest of the viewport edge to edge instead of using a padded, centered column. */
+  fullBleed?: boolean;
 }
 
-function CrudPageLayout({ children, headerAction }: CrudPageLayoutProps) {
+function CrudPageLayout({ children, headerAction, fullBleed = false }: CrudPageLayoutProps) {
   const username = useAuthStore((state) => state.user?.username);
   const sessionId = useAuthStore((state) => state.sessionId);
   const logout = useAuthStore((state) => state.logout);
@@ -34,7 +36,7 @@ function CrudPageLayout({ children, headerAction }: CrudPageLayoutProps) {
     }`;
 
   return (
-    <div className="min-h-dvh bg-[#f4f5f6]">
+    <div className={fullBleed ? "flex h-dvh flex-col bg-[#f4f5f6]" : "min-h-dvh bg-[#f4f5f6]"}>
       <header className="border-b-4 border-[#4a8b3a] bg-[#123f5d] text-white">
         <div className="mx-auto flex min-h-16 max-w-360 items-center justify-between gap-4 px-5 py-2 sm:px-7">
           <Link to="/projects" className="flex min-w-0 items-center gap-3 text-white! no-underline">
@@ -77,7 +79,9 @@ function CrudPageLayout({ children, headerAction }: CrudPageLayoutProps) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-360 p-4 sm:p-6">
+      <main
+        className={fullBleed ? "flex min-h-0 flex-1 flex-col" : "mx-auto max-w-360 p-4 sm:p-6"}
+      >
         {error && (
           <Alert
             type="error"
