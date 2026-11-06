@@ -1,16 +1,17 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Button, Flex, Result, Spin, Typography } from "antd";
+import { Button, Flex, Result, Spin, Typography, message } from "antd";
 import * as L from "leaflet";
-import { useQuery } from "react-query";
-import { Link, useParams } from "react-router";
+import { useMutation, useQuery, useQueryClient } from "react-query";
+import { Link, useNavigate, useParams } from "react-router";
 import { api, type FeatureDetections, type Organization, type Project } from "../../api";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { Map, type MapPolygon, type RectangleBounds } from "../../components/Map";
 import { ProjectProgressCard } from "../../components/project/ProjectProgressCard";
+import { ProjectDangerZone } from "../../components/project/ProjectDangerZone";
 import { DetectionList, type SheetDetections } from "../../components/project/DetectionList";
 import { calculateAreaKm2 } from "../../geo/area";
 import { planarToLatLng, polygonAreaM2 } from "../../geo/projections";
-import { useAuthStore } from "../../stores/authStore";
+import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
 
 const PROGRESS_REFRESH_SECONDS = 10;
@@ -19,6 +20,8 @@ const DETECTIONS_REFRESH_SECONDS = 30;
 interface ProjectDetails {
   organization: Organization;
   project: Project;
+  /** Organization owners may delete projects (superadmins are checked separately). */
+  canDelete: boolean;
 }
 
 interface SheetGeometry extends SheetDetections {
@@ -35,15 +38,15 @@ async function findProject(
     api.organizations.getMy({ signal }),
     api.projects.findById(organizationId, projectId, { signal }),
   ]);
-  const organization = memberships.find(
+  const membership = memberships.find(
     (membership) => membership.organization.id === organizationId,
-  )?.organization;
+  );
 
-  if (!organization) {
+  if (!membership) {
     throw new Error("The project does not exist or you do not have permission to view it.");
   }
 
-  return { organization, project };
+  return { organization: membership.organization, project, canDelete: membership.canOwn };
 }
 
 function toSheetGeometry({ featureId, detections }: FeatureDetections): SheetGeometry {
@@ -76,7 +79,13 @@ function ProjectPage() {
   const { organizationId, projectId } = useParams<{ organizationId: string; projectId: string }>();
   const sessionId = useAuthStore((state) => state.sessionId);
   const username = useAuthStore((state) => state.user?.username);
+  const isSuperadmin = useAuthStore(
+    (state) => state.user?.authorities.includes("ROLE_ADMIN") ?? false,
+  );
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const [messageApi, messageContextHolder] = message.useMessage();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const enabled = Boolean(organizationId && projectId && username);
   const projectQuery = useQuery(
     privateQueryKey(sessionId, "project", organizationId, projectId),
@@ -93,6 +102,26 @@ function ProjectPage() {
     privateQueryKey(sessionId, "project-detections", organizationId, projectId),
     ({ signal }) => api.projects.getDetections(organizationId!, projectId!, { signal }),
     { enabled: projectLoaded, refetchInterval: DETECTIONS_REFRESH_SECONDS * 1000 },
+  );
+
+  const deleteProjectMutation = useMutation(
+    () => withSession(sessionId, () => api.projects.delete(organizationId!, projectId!)),
+    {
+      mutationKey: privateQueryKey(sessionId, "delete-project", organizationId, projectId),
+      onSuccess: () => {
+        if (!isCurrentSession(sessionId)) return;
+        // Stop the polling queries before leaving so they do not refetch a deleted project.
+        for (const key of ["project", "project-progress", "project-detections"]) {
+          queryClient.removeQueries(privateQueryKey(sessionId, key, organizationId, projectId));
+        }
+        void queryClient.invalidateQueries(privateQueryKey(sessionId, "projects"));
+        navigate("/projects", { replace: true });
+      },
+      onError: (error) => {
+        if (!isCurrentSession(sessionId)) return;
+        messageApi.error(error instanceof Error ? error.message : "Unable to delete the project.");
+      },
+    },
   );
 
   const project = projectQuery.data?.project;
@@ -170,10 +199,11 @@ function ProjectPage() {
   }
 
   const { organization } = projectQuery.data;
+  const canDelete = projectQuery.data.canDelete || isSuperadmin;
   const { topLeft, bottomRight } = projectQuery.data.project;
-
   return (
     <CrudPageLayout headerAction={backButton} fullBleed>
+      {messageContextHolder}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <aside className="flex shrink-0 flex-col gap-3 overflow-y-auto border-[#c9d0d5] bg-[#f4f5f6] p-4 max-lg:max-h-[50dvh] max-lg:border-b lg:w-96 lg:border-r">
           <header>
@@ -212,6 +242,14 @@ function ProjectPage() {
             selectedFeatureId={selectedFeatureId}
             onSelect={setSelectedFeatureId}
           />
+
+          {canDelete && (
+            <ProjectDangerZone
+              projectName={projectQuery.data.project.name}
+              isDeleting={deleteProjectMutation.isLoading}
+              onDelete={() => deleteProjectMutation.mutate()}
+            />
+          )}
         </aside>
 
         <section className="min-h-[360px] flex-1 bg-neutral-200">

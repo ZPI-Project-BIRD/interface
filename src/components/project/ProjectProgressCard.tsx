@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Alert, Badge, Progress, Skeleton, Typography } from "antd";
 import { DownOutlined } from "@ant-design/icons";
 import type { ProjectProgress, StageProgress } from "../../api";
+import { describeStatus, overallPercent } from "./progressStatus";
 
 const DOWNLOADED_COLOR = "#7cb3d9";
 const ANALYSED_COLOR = "#4a8b3a";
@@ -16,19 +17,6 @@ interface ProjectProgressCardProps {
 
 function percentOf({ completed, total }: StageProgress) {
   return total === 0 ? 0 : Math.round((completed / total) * 100);
-}
-
-function describeStatus({ featureDownloads, recognitionJobs }: ProjectProgress) {
-  if (featureDownloads.total === 0) {
-    return { label: "Discovering sheets", badge: "processing" as const };
-  }
-  if (recognitionJobs.completed === recognitionJobs.total) {
-    return { label: "Completed", badge: "success" as const };
-  }
-  if (featureDownloads.completed < featureDownloads.total) {
-    return { label: "Downloading sheets", badge: "processing" as const };
-  }
-  return { label: "Analysing sheets", badge: "processing" as const };
 }
 
 function StageRow({ label, stage, color }: { label: string; stage: StageProgress; color: string }) {
@@ -68,14 +56,7 @@ export function ProjectProgressCard({
 
   const { featureDownloads, recognitionJobs } = progress;
   const status = describeStatus(progress);
-  const overallPercent =
-    featureDownloads.total === 0
-      ? 0
-      : Math.round(
-          ((featureDownloads.completed + recognitionJobs.completed) /
-            (featureDownloads.total + recognitionJobs.total)) *
-            100,
-        );
+  const percent = overallPercent(progress);
   const waitingForDownload = featureDownloads.total - featureDownloads.completed;
   const waitingForAnalysis = featureDownloads.completed - recognitionJobs.completed;
 
@@ -90,7 +71,7 @@ export function ProjectProgressCard({
         <div className="flex items-center justify-between gap-3">
           <Badge status={status.badge} text={<span className="font-medium">{status.label}</span>} />
           <span className="flex items-center gap-2 text-sm tabular-nums text-neutral-600">
-            {overallPercent}%
+            {percent}%
             <DownOutlined
               className={`text-xs transition-transform ${expanded ? "rotate-180" : ""}`}
             />
@@ -98,7 +79,10 @@ export function ProjectProgressCard({
         </div>
         <Progress
           percent={percentOf(featureDownloads)}
-          success={{ percent: percentOf(recognitionJobs), strokeColor: ANALYSED_COLOR }}
+          success={{
+            percent: percentOf(recognitionJobs),
+            strokeColor: ANALYSED_COLOR,
+          }}
           strokeColor={DOWNLOADED_COLOR}
           showInfo={false}
           size="small"

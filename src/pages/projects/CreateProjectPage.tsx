@@ -49,6 +49,7 @@ function toCreateProjectPayload(name: string, rectangle: RectangleBounds): Creat
 function CreateProjectPage() {
   const [form] = Form.useForm<ProjectFormValues>();
   const [rectangle, setRectangle] = useState<RectangleBounds | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
   const [messageApi, messageContextHolder] = message.useMessage();
   const navigate = useNavigate();
   const organizationId = Form.useWatch("organizationId", form);
@@ -233,7 +234,7 @@ function CreateProjectPage() {
                 </>
               ) : (
                 <Typography.Text type="secondary">
-                  Click and drag on the map to draw a rectangle (maximum 20 km²).
+                  Click two opposite corners on the map to draw a rectangle (maximum 20 km²). Drag to move the map.
                 </Typography.Text>
               )}
             </Flex>
@@ -255,12 +256,19 @@ function CreateProjectPage() {
         </section>
 
         <section className="relative min-h-140 overflow-hidden border border-[#c9d0d5] bg-neutral-200 lg:min-h-[680px]">
-          <Map mode="draw-rectangle" rectangle={rectangle} onRectangleDraw={handleRectangleDraw} />
+          <Map
+            mode="draw-rectangle"
+            rectangle={rectangle}
+            onRectangleDraw={handleRectangleDraw}
+            onDrawingChange={setIsDrawing}
+          />
           <div className="pointer-events-none absolute top-4 left-1/2 z-500 -translate-x-1/2 border border-[#aeb8bf] bg-white/95 px-4 py-2">
             <Typography.Text className="whitespace-nowrap">
-              {rectangle
-                ? "Drag again to replace the selected area"
-                : "Drag to select the project area"}
+              {isDrawing
+                ? "Click to place the opposite corner · Esc to cancel"
+                : rectangle
+                  ? "Click to start a new area"
+                  : "Click to place the first corner"}
             </Typography.Text>
           </div>
         </section>

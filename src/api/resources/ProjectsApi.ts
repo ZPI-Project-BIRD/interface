@@ -50,4 +50,15 @@ export class ProjectsApi {
       options,
     );
   }
+
+  async delete(
+    organizationId: string,
+    projectId: string,
+    options?: ApiMethodOptions,
+  ): Promise<Project[]> {
+    return await this.client.delete(
+      `/organizations/${organizationId}/projects/${projectId}`,
+      options,
+    );
+  }
 }
