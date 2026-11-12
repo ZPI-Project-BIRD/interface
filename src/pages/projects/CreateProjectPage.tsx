@@ -1,12 +1,14 @@
 import { useCallback, useState } from "react";
-import { Alert, Button, Flex, Form, Input, Result, Select, Typography, message } from "antd";
-import { useMutation, useQuery } from "react-query";
-import { Link, useNavigate } from "react-router";
+import { Alert, Button, Flex, Form, Input, Select, Typography, message } from "antd";
+import { useMutation } from "react-query";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { api, type CreateProjectPayload } from "../../api";
 import { Map, type RectangleBounds } from "../../components/Map";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
+import { useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
+import { AccessFeedback } from "../../components/AccessFeedback";
 
 const EARTH_RADIUS_KILOMETERS = 6_371.0088;
 const MAX_RECTANGLE_AREA_KM2 = 20;
@@ -47,21 +49,17 @@ function toCreateProjectPayload(name: string, rectangle: RectangleBounds): Creat
 }
 
 function CreateProjectPage() {
+  const [searchParams] = useSearchParams();
   const [form] = Form.useForm<ProjectFormValues>();
   const [rectangle, setRectangle] = useState<RectangleBounds | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [messageApi, messageContextHolder] = message.useMessage();
   const navigate = useNavigate();
-  const organizationId = Form.useWatch("organizationId", form);
+  const organizationId = Form.useWatch("organizationId", { form, preserve: true });
   const projectName = Form.useWatch("name", form);
   const sessionId = useAuthStore((state) => state.sessionId);
-  const username = useAuthStore((state) => state.user?.username);
-
-  const organizationsQuery = useQuery(
-    privateQueryKey(sessionId, "organizations", "editable"),
-    ({ signal }) => api.organizations.getEditable({ signal }),
-    { enabled: Boolean(username) },
-  );
+  const access = useOrganizationCapabilities(organizationId);
+  const organizationsQuery = access.query;
 
   const createProjectMutation = useMutation(
     ({
@@ -78,8 +76,9 @@ function CreateProjectPage() {
         if (!isCurrentSession(sessionId)) return;
         navigate(`/projects/${project.organizationId}/${project.id}`, { replace: true });
       },
-      onError: (error) => {
+      onError: (error, variables) => {
         if (!isCurrentSession(sessionId)) return;
+        access.reportError(error, variables.organizationId);
         messageApi.error(error instanceof Error ? error.message : "Unable to create the project.");
       },
     },
@@ -108,6 +107,7 @@ function CreateProjectPage() {
   );
 
   const handleSubmit = (values: ProjectFormValues) => {
+    if (!access.canCreateProject || values.organizationId !== organizationId) return;
     if (!rectangle) {
       messageApi.error("Draw a project area on the map before continuing.");
       return;
@@ -117,32 +117,15 @@ function CreateProjectPage() {
   };
 
   const isFormComplete = Boolean(organizationId && projectName?.trim());
-  const canSubmit = isFormComplete && Boolean(rectangle) && !createProjectMutation.isLoading;
+  const canSubmit = access.canCreateProject && isFormComplete && Boolean(rectangle) && !createProjectMutation.isLoading;
   const areaKm2 = rectangle ? calculateRectangleAreaKm2(rectangle) : null;
 
-  if (organizationsQuery.isSuccess && organizationsQuery.data.length === 0) {
-    return (
-      <CrudPageLayout
-        headerAction={
-          <Link to="/projects">
-            <Button>Back to projects</Button>
-          </Link>
-        }
-      >
-        <section className="border border-[#c9d0d5] bg-white">
-          <Result
-            status="403"
-            title="Project creation unavailable"
-            subTitle="You are not permitted to create projects, since you are not an editor or owner of any organization."
-            extra={
-              <Link to="/projects">
-                <Button type="primary">Return to projects</Button>
-              </Link>
-            }
-          />
-        </section>
-      </CrudPageLayout>
-    );
+  if (access.state !== "ready" || (!access.administrator && (organizationId ? !access.canCreateProject : access.editable.length === 0))) {
+    return <CrudPageLayout><AccessFeedback
+      state={access.state === "ready" ? "denied" : access.state}
+      error={organizationsQuery.error}
+      onRetry={() => void access.retry()}
+    /></CrudPageLayout>;
   }
 
   return (
@@ -169,6 +152,7 @@ function CreateProjectPage() {
             layout="vertical"
             requiredMark={false}
             disabled={createProjectMutation.isLoading}
+            initialValues={{ organizationId: searchParams.get("organizationId") ?? undefined }}
             onFinish={handleSubmit}
           >
             <Form.Item
@@ -176,21 +160,20 @@ function CreateProjectPage() {
               name="organizationId"
               rules={[{ required: true, message: "Please select an organization." }]}
             >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                loading={organizationsQuery.isLoading}
-                placeholder="Select organization"
-                options={organizationsQuery.data?.map((organization) => ({
-                  label: organization.name,
-                  value: organization.id,
-                }))}
-                notFoundContent={
-                  organizationsQuery.isLoading
-                    ? "Loading organizations…"
-                    : "No editable organizations"
-                }
-              />
+              {access.administrator ? <Input placeholder="Enter a known organization ID" autoComplete="off" /> : (
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  loading={organizationsQuery.isLoading}
+                  placeholder="Select organization"
+                  options={access.editable.map(({ organization }) => ({ label: organization.name, value: organization.id }))}
+                  notFoundContent={
+                    organizationsQuery.isLoading
+                      ? "Loading organizations…"
+                      : "No editable organizations"
+                  }
+                />
+              )}
             </Form.Item>
 
             {organizationsQuery.isError && (

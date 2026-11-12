@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
-import { useQuery } from "react-query";
-import { Link, NavLink } from "react-router";
-import { api } from "../api";
+import { Link, NavLink, useParams, useSearchParams } from "react-router";
 import logo from "../assets/logo.png";
 import { useAuthStore } from "../stores/authStore";
 import { Alert, Button } from "antd";
 import { LogoutOutlined } from "@ant-design/icons";
-import { privateQueryKey } from "../queryClient";
+import { useOrganizationCapabilities } from "../hooks/useOrganizationCapabilities";
 
 interface CrudPageLayoutProps {
   children: ReactNode;
@@ -16,18 +14,16 @@ interface CrudPageLayoutProps {
 }
 
 function CrudPageLayout({ children, headerAction, fullBleed = false }: CrudPageLayoutProps) {
-  const username = useAuthStore((state) => state.user?.username);
-  const sessionId = useAuthStore((state) => state.sessionId);
   const logout = useAuthStore((state) => state.logout);
   const loggingOut = useAuthStore((state) => state.loggingOut);
   const error = useAuthStore((state) => state.error);
   const clearError = useAuthStore((state) => state.clearError);
-  const ownedOrganizationsQuery = useQuery(
-    privateQueryKey(sessionId, "organizations", "owned"),
-    ({ signal }) => api.organizations.getOwned({ signal }),
-    { enabled: Boolean(username) && !loggingOut, staleTime: 60_000 },
-  );
-  const canManageOrganizations = (ownedOrganizationsQuery.data?.length ?? 0) > 0;
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+  const organizationId = params.organizationId ?? searchParams.get("organizationId") ?? undefined;
+  const access = useOrganizationCapabilities(organizationId);
+  const canManageOrganizations = access.state === "ready" &&
+    (organizationId ? access.canManageUsers : access.administrator || access.manageable.length > 0);
   const navigationClassName = ({ isActive }: { isActive: boolean }) =>
     `flex items-center border-b-2 px-3 text-sm font-medium !text-white no-underline ${
       isActive
@@ -55,9 +51,12 @@ function CrudPageLayout({ children, headerAction, fullBleed = false }: CrudPageL
                 Projects
               </NavLink>
               {canManageOrganizations && (
-                <NavLink to="/organizations" className={navigationClassName}>
+                <NavLink to={organizationId ? `/organizations/${encodeURIComponent(organizationId)}` : "/organizations"} className={navigationClassName}>
                   Organizations
                 </NavLink>
+              )}
+              {access.administrator && (
+                <NavLink to="/admin" className={navigationClassName}>Administration</NavLink>
               )}
               <NavLink to="/account" className={navigationClassName}>
                 Account

@@ -6,7 +6,6 @@ import {
   Input,
   Modal,
   Popconfirm,
-  Result,
   Select,
   Table,
   Tag,
@@ -15,16 +14,19 @@ import {
   type TableColumnsType,
 } from "antd";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { Link } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   api,
   type CreateOrganizationUserPayload,
   type OrganizationUser,
 } from "../../api";
+import { OrganizationUserEditor } from "../../components/OrganizationUserEditor";
 import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
+import { useOrganizationCapabilities, useOrganizations } from "../../hooks/useOrganizationCapabilities";
+import { AccessFeedback } from "../../components/AccessFeedback";
 
 type AddUserFormValues = CreateOrganizationUserPayload;
 
@@ -84,26 +86,23 @@ const baseUserColumns: TableColumnsType<OrganizationUser> = [
 ];
 
 function OrganizationsPage() {
-  const [organizationId, setOrganizationId] = useState<string>();
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const { organizationId } = useParams();
+  const navigate = useNavigate();
+  const organizations = useOrganizations();
+  const selectedOrganizationId = organizationId ?? organizations.manageable[0]?.organization.id;
+  const access = useOrganizationCapabilities(selectedOrganizationId);
+  const [editingUser, setEditingUser] = useState<{ organizationId: string; user: OrganizationUser }>();
+  const [addUserOrganizationId, setAddUserOrganizationId] = useState<string>();
   const [addUserForm] = Form.useForm<AddUserFormValues>();
   const [messageApi, messageContextHolder] = message.useMessage();
   const [modalApi, modalContextHolder] = Modal.useModal();
   const queryClient = useQueryClient();
-  const username = useAuthStore((state) => state.user?.username);
   const sessionId = useAuthStore((state) => state.sessionId);
-  const organizationsQuery = useQuery(
-    privateQueryKey(sessionId, "organizations", "owned"),
-    ({ signal }) => api.organizations.getOwned({ signal }),
-    { enabled: Boolean(username), staleTime: 60_000 },
-  );
-
-  const selectedOrganizationId = organizationId ?? organizationsQuery.data?.[0]?.id;
-
+  const username = useAuthStore((state) => state.user?.username);
   const usersQuery = useQuery(
     privateQueryKey(sessionId, "organization-users", selectedOrganizationId),
     ({ signal }) => api.users.getAll(selectedOrganizationId!, { signal }),
-    { enabled: Boolean(selectedOrganizationId && username) },
+    { enabled: Boolean(selectedOrganizationId && access.canManageUsers), onError: access.reportError },
   );
 
   const addUserMutation = useMutation(
@@ -117,7 +116,7 @@ function OrganizationsPage() {
           privateQueryKey(sessionId, "organization-users", organizationId),
           (currentUsers) => [...(currentUsers ?? []), user],
         );
-        setIsAddUserOpen(false);
+        setAddUserOrganizationId(undefined);
         addUserForm.resetFields();
         modalApi.success({
           title: "User created",
@@ -131,8 +130,9 @@ function OrganizationsPage() {
           ),
         });
       },
-      onError: (error) => {
+      onError: (error, variables) => {
         if (!isCurrentSession(sessionId)) return;
+        access.reportError(error, variables.organizationId);
         messageApi.error(error instanceof Error ? error.message : "Unable to create the user.");
       },
     },
@@ -152,34 +152,39 @@ function OrganizationsPage() {
         );
         messageApi.success(`${user.friendlyName || user.username} was removed.`);
       },
-      onError: (error) => {
+      onError: (error, variables) => {
         if (!isCurrentSession(sessionId)) return;
+        access.reportError(error, variables.organizationId);
         messageApi.error(error instanceof Error ? error.message : "Unable to remove the user.");
       },
     },
   );
 
   const handleAddUser = (values: AddUserFormValues) => {
-    if (selectedOrganizationId) {
-      addUserMutation.mutate({ ...values, organizationId: selectedOrganizationId });
+    if (selectedOrganizationId && access.canManageUsers && access.userRoles.includes(values.membershipRole)) {
+      addUserMutation.mutate({ ...values, membershipRole: access.administrator ? values.membershipRole : "VIEWER", organizationId: selectedOrganizationId });
     }
   };
 
   const userColumns: TableColumnsType<OrganizationUser> = [
     ...baseUserColumns,
+    ...(access.canEditUsers ? [{
+      title: "Edit", key: "edit", width: 100,
+      render: (_: unknown, user: OrganizationUser) => user.username !== username
+        ? <Button size="small" onClick={() => setEditingUser({ organizationId: selectedOrganizationId!, user })}>Edit user</Button> : null,
+    }] : []),
     {
       title: "Actions",
       key: "actions",
       align: "right",
       width: 120,
       render: (_, user) => {
-        const isOwner = user.membershipRole.includes("OWNER");
         const isRemoving =
           removeUserMutation.isLoading && removeUserMutation.variables?.user.id === user.id;
 
-        if (isOwner) {
+        if (!access.canRemoveUser(user)) {
           return (
-            <Button danger size="small" disabled title="Organization owners cannot be removed.">
+            <Button danger size="small" disabled title="You cannot remove yourself or an owner without administrator authority.">
               Remove
             </Button>
           );
@@ -193,7 +198,7 @@ function OrganizationsPage() {
             okButtonProps={{ danger: true }}
             cancelText="Cancel"
             onConfirm={() => {
-              if (selectedOrganizationId) {
+              if (selectedOrganizationId && access.canRemoveUser(user)) {
                 removeUserMutation.mutate({ organizationId: selectedOrganizationId, user });
               }
             }}
@@ -207,67 +212,50 @@ function OrganizationsPage() {
     },
   ];
 
-  if (organizationsQuery.isError) {
-    return (
-      <CrudPageLayout>
-        <Alert
-          type="error"
-          showIcon
-          message="Could not load organizations"
-          description={
-            organizationsQuery.error instanceof Error
-              ? organizationsQuery.error.message
-              : "Please try again."
-          }
-          action={<Button onClick={() => void organizationsQuery.refetch()}>Retry</Button>}
-        />
-      </CrudPageLayout>
-    );
-  }
-
-  if (organizationsQuery.isSuccess && organizationsQuery.data.length === 0) {
-    return (
-      <CrudPageLayout>
-        <section className="border border-[#c9d0d5] bg-white">
-          <Result
-            status="403"
-            title="Organization management unavailable"
-            subTitle="You do not own an organization and are not permitted to manage organization users."
-            extra={
-              <Link to="/projects">
-                <Button type="primary">Return to projects</Button>
-              </Link>
-            }
-          />
-        </section>
-      </CrudPageLayout>
-    );
+  if (selectedOrganizationId && (access.state !== "ready" || !access.canManageUsers)) {
+    return <CrudPageLayout><AccessFeedback
+      state={access.state === "ready" ? "denied" : access.state}
+      error={access.query.error}
+      onRetry={() => void access.retry()}
+    /></CrudPageLayout>;
   }
 
   return (
     <CrudPageLayout>
       {messageContextHolder}
       {modalContextHolder}
+      {editingUser && editingUser.organizationId === selectedOrganizationId && selectedOrganizationId && access.canEditUsers && <OrganizationUserEditor
+        key={`${selectedOrganizationId}:${editingUser.user.id}`}
+        organizationId={selectedOrganizationId} user={editingUser.user} onClose={() => setEditingUser(undefined)}
+      />}
       <CrudPageHeader
         title="Manage organizations"
         actions={
           <>
+            {access.administrator && <Input.Search
+              placeholder="Open organization by ID"
+              enterButton="Open"
+              onSearch={(id) => { if (id.trim()) navigate(`/organizations/${encodeURIComponent(id.trim())}`); }}
+              className="max-w-96"
+            />}
             <Select
               id="organization-select"
               value={selectedOrganizationId}
-              onChange={setOrganizationId}
-              loading={organizationsQuery.isLoading}
+              onChange={(id) => { setAddUserOrganizationId(undefined); addUserForm.resetFields(); navigate(`/organizations/${id}`); }}
+              loading={access.query.isLoading}
               placeholder="Select organization"
               className="w-full max-w-75"
-              options={organizationsQuery.data?.map((organization) => ({
-                label: organization.name,
-                value: organization.id,
-              }))}
+              options={[
+                ...access.manageable.map(({ organization }) => ({ label: organization.name, value: organization.id })),
+                ...(selectedOrganizationId && !access.manageable.some(({ organization }) => organization.id === selectedOrganizationId)
+                  ? [{ label: selectedOrganizationId, value: selectedOrganizationId }] : []),
+              ]}
             />
+            {selectedOrganizationId && <Link to={`/projects?organizationId=${encodeURIComponent(selectedOrganizationId)}`}><Button>Organization projects</Button></Link>}
             <Button
               type="primary"
-              disabled={!selectedOrganizationId}
-              onClick={() => setIsAddUserOpen(true)}
+              disabled={!selectedOrganizationId || !access.canManageUsers}
+              onClick={() => setAddUserOrganizationId(selectedOrganizationId)}
             >
               Add user
             </Button>
@@ -276,50 +264,27 @@ function OrganizationsPage() {
       />
 
       <section>
-        {usersQuery.isError && (
-          <Alert
-            type="error"
-            showIcon
-            message="Could not load organization users"
-            description={
-              usersQuery.error instanceof Error ? usersQuery.error.message : "Please try again."
-            }
-            action={
-              <Button size="small" onClick={() => void usersQuery.refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        )}
-
-        {!usersQuery.isError && (
+        {usersQuery.isError && <AccessFeedback error={usersQuery.error} onRetry={() => { void access.retry().then(() => usersQuery.refetch()); }} />}
+        {!selectedOrganizationId && <Alert type="info" title="Open an organization by its ID to manage its users." />}
+        {selectedOrganizationId && !usersQuery.isError && (
           <Table<OrganizationUser>
-            bordered
-            showHeader={false}
-            className="rounded-none!"
-            columns={userColumns}
-            dataSource={usersQuery.data ?? []}
-            loading={
-              organizationsQuery.isLoading || usersQuery.isLoading || !selectedOrganizationId
-            }
-            locale={{ emptyText: "This organization has no users." }}
-            pagination={false}
-            rowKey="id"
-            scroll={{ x: 760 }}
-            size="middle"
+            bordered showHeader={false} className="rounded-none!" columns={userColumns}
+            dataSource={usersQuery.data ?? []} loading={usersQuery.isLoading}
+            locale={{ emptyText: "This organization has no users." }} pagination={false}
+            rowKey="id" scroll={{ x: 760 }} size="middle"
           />
         )}
       </section>
 
       <Modal
         title="Add user to organization"
-        open={isAddUserOpen}
+        open={Boolean(selectedOrganizationId) && addUserOrganizationId === selectedOrganizationId && access.canManageUsers}
         okText="Add user"
         confirmLoading={addUserMutation.isLoading}
-        onOk={() => addUserForm.submit()}
+        onOk={() => { if (access.canManageUsers) addUserForm.submit(); }}
         onCancel={() => {
           if (!addUserMutation.isLoading) {
-            setIsAddUserOpen(false);
+            setAddUserOrganizationId(undefined);
             addUserForm.resetFields();
           }
         }}
@@ -329,7 +294,7 @@ function OrganizationsPage() {
           layout="vertical"
           requiredMark={false}
           initialValues={{ membershipRole: "VIEWER" }}
-          disabled={addUserMutation.isLoading}
+          disabled={addUserMutation.isLoading || !access.canManageUsers}
           onFinish={handleAddUser}
         >
           <Form.Item
@@ -362,11 +327,7 @@ function OrganizationsPage() {
             rules={[{ required: true, message: "Please select a role." }]}
           >
             <Select
-              options={[
-                { value: "VIEWER", label: "Viewer" },
-                { value: "ANNOTATOR", label: "Annotator" },
-                { value: "EDITOR", label: "Editor" },
-              ]}
+              options={access.userRoles.map((role) => ({ value: role, label: formatRole(role) }))}
             />
           </Form.Item>
         </Form>

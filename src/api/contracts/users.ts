@@ -20,3 +20,14 @@ export interface CreatedOrganizationUser {
   user: OrganizationUser;
   password: string;
 }
+
+export interface CreateUnassignedUserPayload {
+  friendlyName: string;
+  username: string;
+  isAdmin: boolean;
+}
+
+export interface CreatedUnassignedUser {
+  user: Omit<OrganizationUser, "membershipRole"> & { membershipRole: null };
+  password: string;
+}

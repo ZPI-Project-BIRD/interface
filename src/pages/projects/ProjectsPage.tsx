@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Alert,
   Avatar,
   Button,
   Empty,
@@ -10,14 +9,16 @@ import {
   Typography,
   type TableColumnsType,
 } from "antd";
-import { useQuery } from "react-query";
-import { Link } from "react-router";
+import { useQuery, useQueryClient } from "react-query";
+import { Link, useSearchParams } from "react-router";
 import { api, type Organization, type Project } from "../../api";
 import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { useAuthStore } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
 import { ProjectStatus } from "../../components/project/ProjectStatus";
+import { AccessFeedback } from "../../components/AccessFeedback";
+import { reportOrganizationDenial, useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
 import { PolandMiniMap } from "../../components/project/PolandMiniMap";
 
 interface ProjectGroup {
@@ -69,15 +70,11 @@ const organizationColumns: TableColumnsType<ProjectGroup> = [
   },
 ];
 
-async function getProjects(signal?: AbortSignal): Promise<ProjectGroup[]> {
-  const memberships = await api.organizations.getMy({ signal });
-  const organizations = Array.from(
-    new Map(memberships.map(({ organization }) => [organization.id, organization])).values(),
-  );
+async function getProjects(organizations: Organization[], load: (organizationId: string) => Promise<Project[]>): Promise<ProjectGroup[]> {
   const groups = await Promise.all(
     organizations.map(async (organization) => ({
       organization,
-      projects: await api.projects.getAll(organization.id, { signal }),
+      projects: await load(organization.id),
     })),
   );
 
@@ -90,11 +87,19 @@ function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"ascending" | "descending">("ascending");
   const sessionId = useAuthStore((state) => state.sessionId);
-  const username = useAuthStore((state) => state.user?.username);
+  const [searchParams] = useSearchParams();
+  const selectedOrganizationId = searchParams.get("organizationId") || undefined;
+  const access = useOrganizationCapabilities(selectedOrganizationId);
+  const queryClient = useQueryClient();
   const projectsQuery = useQuery(
-    privateQueryKey(sessionId, "projects"),
-    ({ signal }) => getProjects(signal),
-    { enabled: Boolean(username) },
+    privateQueryKey(sessionId, "projects", selectedOrganizationId, access.query.data?.map(({ organization }) => organization.id)),
+    ({ signal }) => getProjects(selectedOrganizationId
+      ? [access.organization!]
+      : (access.query.data ?? []).map(({ organization }) => organization), async (organizationId) => {
+      try { return await api.projects.getAll(organizationId, { signal }); }
+      catch (error) { reportOrganizationDenial(queryClient, sessionId, organizationId, error); throw error; }
+    }),
+    { enabled: selectedOrganizationId ? access.state === "ready" && access.canRead : access.query.isSuccess },
   );
   const groups = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const visibleGroups = useMemo(() => {
@@ -122,16 +127,17 @@ function ProjectsPage() {
           group.projects.length > 0,
       );
   }, [groups, search, sort]);
-  const createButton = (
-    <Link to="/projects/create">
+  const createButton = access.state === "ready" && (selectedOrganizationId ? access.canCreateProject : access.administrator || access.editable.length > 0) ? (
+    <Link to={selectedOrganizationId ? `/projects/create?organizationId=${encodeURIComponent(selectedOrganizationId)}` : "/projects/create"}>
       <Button type="primary">New project</Button>
     </Link>
-  );
+  ) : null;
 
+  const canShowProjects = selectedOrganizationId ? access.state === "ready" : access.query.isSuccess;
   return (
     <CrudPageLayout>
       <CrudPageHeader
-        title="My projects"
+        title={selectedOrganizationId ? `Projects · ${access.organization?.name ?? selectedOrganizationId}` : "My projects"}
         actions={
           <>
             <Select
@@ -150,13 +156,17 @@ function ProjectsPage() {
               placeholder="Filter projects…"
               className="sm:w-64"
             />
+            {selectedOrganizationId && access.canManageUsers && <Link to={`/organizations/${encodeURIComponent(selectedOrganizationId)}`}><Button>Manage organization</Button></Link>}
             {createButton}
           </>
         }
       />
 
       <section>
-        {projectsQuery.isLoading && (
+        {selectedOrganizationId && access.state !== "ready" && <AccessFeedback state={access.state} error={access.query.error} onRetry={() => void access.retry()} />}
+        {!selectedOrganizationId && access.query.isError && <AccessFeedback error={access.query.error} onRetry={() => void access.retry()} />}
+        {!selectedOrganizationId && access.query.isLoading && <Typography.Paragraph>Loading organizations…</Typography.Paragraph>}
+        {canShowProjects && projectsQuery.isLoading && (
           <Table<ProjectGroup>
             className="[&_.ant-table-thead>tr>th]:!bg-[#f6f8fa]"
             columns={organizationColumns}
@@ -168,33 +178,17 @@ function ProjectsPage() {
           />
         )}
 
-        {projectsQuery.isError && (
-          <Alert
-            type="error"
-            showIcon
-            message="Could not load projects"
-            description={
-              projectsQuery.error instanceof Error
-                ? projectsQuery.error.message
-                : "Please try again."
-            }
-            action={
-              <Button size="small" onClick={() => void projectsQuery.refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        )}
+        {projectsQuery.isError && <AccessFeedback error={projectsQuery.error} onRetry={() => { void access.retry().then(() => projectsQuery.refetch()); }} />}
 
-        {projectsQuery.isSuccess && groups.length === 0 && (
+        {canShowProjects && projectsQuery.isSuccess && groups.length === 0 && (
           <div className="border border-neutral-200 p-8">
-            <Empty description="You do not have access to any organizations yet.">
+            <Empty description={access.administrator ? "No organization memberships. Open a known organization from Administration." : "You do not have access to any organizations yet."}>
               {createButton}
             </Empty>
           </div>
         )}
 
-        {projectsQuery.isSuccess && groups.length > 0 && visibleGroups.length > 0 && (
+        {canShowProjects && projectsQuery.isSuccess && groups.length > 0 && visibleGroups.length > 0 && (
           <Table<ProjectGroup>
             bordered
             className="[&_.ant-table-thead>tr>th]:!bg-[#f6f8fa]"
@@ -224,7 +218,7 @@ function ProjectsPage() {
           />
         )}
 
-        {projectsQuery.isSuccess && groups.length > 0 && visibleGroups.length === 0 && (
+        {canShowProjects && projectsQuery.isSuccess && groups.length > 0 && visibleGroups.length === 0 && (
           <Empty description="No organizations or projects match your filter." />
         )}
       </section>

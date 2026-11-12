@@ -1,9 +1,9 @@
-import { Button, Flex, Result, Spin, Typography } from "antd";
-import { useQuery } from "react-query";
-import { Navigate, Outlet } from "react-router";
-import { api } from "../api";
+import { Flex, Spin, Typography } from "antd";
+import { Navigate, Outlet, useParams, useSearchParams } from "react-router";
 import { useAuthStore } from "../stores/authStore";
-import { privateQueryKey } from "../queryClient";
+import { useOrganizationCapabilities } from "../hooks/useOrganizationCapabilities";
+import { isAdministrator } from "../permissions/organizationCapabilities";
+import { AccessFeedback } from "./AccessFeedback";
 import CrudPageLayout from "./ProjectsPageLayout";
 
 export function RequireAuth() {
@@ -30,47 +30,31 @@ export function RequireGuest() {
   return user ? <Navigate to="/projects" replace /> : <Outlet />;
 }
 
+export function RequireAdministrator() {
+  const user = useAuthStore((state) => state.user);
+  return isAdministrator(user) ? <Outlet /> : (
+    <CrudPageLayout><AccessFeedback state="denied" onRetry={() => window.location.reload()} /></CrudPageLayout>
+  );
+}
+
 export function RequireOrganizationOwner() {
-  const username = useAuthStore((state) => state.user?.username);
-  const sessionId = useAuthStore((state) => state.sessionId);
-  const ownedOrganizationsQuery = useQuery(
-    privateQueryKey(sessionId, "organizations", "owned"),
-    ({ signal }) => api.organizations.getOwned({ signal }),
-    { enabled: Boolean(username), staleTime: 60_000 },
-  );
-
-  if (ownedOrganizationsQuery.isLoading) {
-    return (
-      <Flex align="center" justify="center" className="min-h-dvh">
-        <Spin size="large" />
-      </Flex>
-    );
+  const { organizationId } = useParams();
+  const access = useOrganizationCapabilities(organizationId);
+  if (access.state !== "ready") {
+    return <CrudPageLayout><AccessFeedback state={access.state} error={access.query.error} onRetry={() => void access.retry()} /></CrudPageLayout>;
   }
+  return access.administrator || (organizationId ? access.canManageUsers : access.manageable.length > 0)
+    ? <Outlet />
+    : <CrudPageLayout><AccessFeedback state="denied" onRetry={() => void access.retry()} /></CrudPageLayout>;
+}
 
-  if (ownedOrganizationsQuery.isError) {
-    return (
-      <Flex align="center" justify="center" className="min-h-dvh">
-        <Result
-          status="error"
-          title="Unable to verify organization ownership"
-          subTitle={
-            ownedOrganizationsQuery.error instanceof Error
-              ? ownedOrganizationsQuery.error.message
-              : "Please try again."
-          }
-          extra={
-            <Button type="primary" onClick={() => void ownedOrganizationsQuery.refetch()}>
-              Retry
-            </Button>
-          }
-        />
-      </Flex>
-    );
+export function RequireProjectCreator() {
+  const [searchParams] = useSearchParams();
+  const organizationId = searchParams.get("organizationId") || undefined;
+  const access = useOrganizationCapabilities(organizationId);
+  if (access.state !== "ready") {
+    return <CrudPageLayout><AccessFeedback state={access.state} error={access.query.error} onRetry={() => void access.retry()} /></CrudPageLayout>;
   }
-
-  return ownedOrganizationsQuery.data?.length ? (
-    <Outlet />
-  ) : (
-    <Navigate to="/projects" replace />
-  );
+  const allowed = organizationId ? access.canCreateProject : access.administrator || access.editable.length > 0;
+  return allowed ? <Outlet /> : <CrudPageLayout><AccessFeedback state="denied" onRetry={() => void access.retry()} /></CrudPageLayout>;
 }

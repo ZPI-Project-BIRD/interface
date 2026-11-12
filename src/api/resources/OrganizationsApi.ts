@@ -12,6 +12,18 @@ export class OrganizationsApi {
     this.client = client;
   }
 
+  async create(name: string): Promise<Organization> {
+    return this.client.post("/organizations", { name });
+  }
+
+  async updateUserFullName(organizationId: string, username: string, fullName: string) {
+    return this.client.patch(`/organizations/${organizationId}/users/${encodeURIComponent(username)}/full-name`, { fullName });
+  }
+
+  async updateUserPassword(organizationId: string, username: string, newPassword: string) {
+    return this.client.patch(`/organizations/${organizationId}/users/${encodeURIComponent(username)}/password`, { newPassword });
+  }
+
   async getMy(options?: ApiMethodOptions): Promise<OrganizationMembership[]> {
     return await this.client.get("/organizations/my", options);
   }

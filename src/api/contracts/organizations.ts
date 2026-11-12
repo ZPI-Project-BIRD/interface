@@ -6,6 +6,4 @@ export interface Organization {
 export interface OrganizationMembership {
   organization: Organization;
   role: string;
-  canEdit: boolean;
-  canOwn: boolean;
 }
