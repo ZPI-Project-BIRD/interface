@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test:api-config": "bun test tests/api-configuration.test.ts",
     "test:session": "bun test tests/session.test.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:permissions": "bun test tests/organization-permissions.test.tsx"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",
