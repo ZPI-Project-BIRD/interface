@@ -1,13 +1,18 @@
 import type { ProjectProgress } from "../../api";
 
-export type ProjectStatusBadge = "processing" | "success";
+export type ProjectStatusBadge = "processing" | "success" | "error" | "warning";
 
-export function describeStatus({ featureDownloads, recognitionJobs }: ProjectProgress): {
+export function describeStatus({ featureDownloads, recognitionJobs, discovery, jobStates }: ProjectProgress): {
   label: string;
   badge: ProjectStatusBadge;
 } {
+  if (discovery?.status === "FAILED") return { label: "Discovery failed", badge: "error" };
+  if (discovery?.status === "RUNNING") return { label: "Discovering source sheets", badge: "processing" };
+  if (discovery?.status === "PENDING") return { label: "Discovery pending", badge: "processing" };
+  if (jobStates && jobStates.failed > 0) return { label: `${jobStates.failed} analysis job${jobStates.failed === 1 ? "" : "s"} failed`, badge: "error" };
   if (featureDownloads.total === 0) {
-    return { label: "Discovering sheets", badge: "processing" };
+    if (discovery?.status === "SUCCEEDED") return { label: "No source sheets found", badge: "warning" };
+    return { label: "No sheets available", badge: "processing" };
   }
   if (recognitionJobs.completed === recognitionJobs.total) {
     return { label: "Completed", badge: "success" };

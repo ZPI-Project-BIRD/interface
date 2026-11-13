@@ -62,6 +62,12 @@ export function ProjectProgressCard({
 
   return (
     <section className="border border-[#c9d0d5] bg-white">
+      {featureDownloads.total === 0 && <Alert
+        type={progress.discovery?.status === "FAILED" ? "error" : "info"} showIcon title={status.label}
+        description={progress.discovery?.status === "SUCCEEDED" ? "Discovery completed without finding source sheets in this area."
+          : progress.discovery?.status === "FAILED" ? "Feature discovery failed. An editor can retry it for this project."
+          : "Waiting for discovery information. Processing status refreshes automatically."}
+      />}
       <button
         type="button"
         aria-expanded={expanded}
@@ -104,6 +110,8 @@ export function ProjectProgressCard({
         <div className="flex flex-col gap-2 border-t border-[#e3e7ea] px-4 py-3">
           <StageRow label="Sheets downloaded" stage={featureDownloads} color={DOWNLOADED_COLOR} />
           <StageRow label="Sheets analysed" stage={recognitionJobs} color={ANALYSED_COLOR} />
+          {progress.discovery && <Typography.Text type="secondary">Discovery: {progress.discovery.status.toLowerCase()} · {progress.discovery.attempts} attempt(s)</Typography.Text>}
+          {progress.jobStates && <Typography.Text>{progress.jobStates.pending} pending · {progress.jobStates.running} running · {progress.jobStates.failed} failed</Typography.Text>}
           <dl className="m-0 grid grid-cols-2 gap-2 text-sm">
             <div>
               <dt className="text-xs text-neutral-500">Waiting for download</dt>

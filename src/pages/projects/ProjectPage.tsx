@@ -16,6 +16,8 @@ import { privateQueryKey } from "../../queryClient";
 import { useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
 import { AccessFeedback } from "../../components/AccessFeedback";
 import { isPermissionDenied } from "../../permissions/organizationCapabilities";
+import { ProcessingRecovery } from "../../components/project/ProcessingRecovery";
+import { SourceFeatures } from "../../components/project/SourceFeatures";
 
 const PROGRESS_REFRESH_SECONDS = 10;
 const DETECTIONS_REFRESH_SECONDS = 30;
@@ -78,6 +80,12 @@ function ProjectPage() {
     { enabled: projectLoaded, refetchInterval: DETECTIONS_REFRESH_SECONDS * 1000, onError: access.reportError },
   );
 
+  const featuresQuery = useQuery(
+    privateQueryKey(sessionId, "project-features", organizationId, projectId),
+    ({ signal }) => api.projects.getFeatures(organizationId!, projectId!, { signal }),
+    { enabled: projectLoaded, refetchInterval: 30_000, onError: access.reportError },
+  );
+
   const deleteProjectMutation = useMutation(
     () => withSession(sessionId, () => api.projects.delete(organizationId!, projectId!)),
     {
@@ -85,7 +93,7 @@ function ProjectPage() {
       onSuccess: () => {
         if (!isCurrentSession(sessionId)) return;
         // Stop the polling queries before leaving so they do not refetch a deleted project.
-        for (const key of ["project", "project-progress", "project-detections"]) {
+        for (const key of ["project", "project-progress", "project-detections", "project-features"]) {
           queryClient.removeQueries(privateQueryKey(sessionId, key, organizationId, projectId));
         }
         void queryClient.invalidateQueries(privateQueryKey(sessionId, "projects"));
@@ -190,6 +198,7 @@ function ProjectPage() {
             updatedAt={progressQuery.dataUpdatedAt || undefined}
             refreshSeconds={PROGRESS_REFRESH_SECONDS}
           />
+          <ProcessingRecovery organizationId={organizationId} projectId={projectId} progress={progressQuery.data} />
 
           <section className="border border-[#c9d0d5] bg-white px-4 py-2">
             <dl className="m-0 divide-y divide-[#e3e7ea]">
@@ -210,6 +219,8 @@ function ProjectPage() {
             selectedFeatureId={selectedFeatureId}
             onSelect={setSelectedFeatureId}
           />
+
+          <SourceFeatures features={featuresQuery.data} loading={featuresQuery.isLoading} error={featuresQuery.error} onRetry={() => void featuresQuery.refetch()} />
 
           {access.state === "error" && <AccessFeedback state="error" error={access.query.error} onRetry={() => void access.retry()} />}
           {canDelete && (
