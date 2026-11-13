@@ -21,12 +21,16 @@ export function organizationCapabilities(
     administrator,
     canRead: administrator || Boolean(user && role && ["VIEWER", "ANNOTATOR", "EDITOR", "OWNER"].includes(role)),
     canCreateProject: administrator || Boolean(user && (role === "EDITOR" || role === "OWNER")),
+    canRetryProcessing: administrator || Boolean(user && (role === "EDITOR" || role === "OWNER")),
+    canAnnotate: administrator || Boolean(user && role && ["ANNOTATOR", "EDITOR", "OWNER"].includes(role)),
+    canReviewHistory: canManage,
     canDeleteProject: canManage,
     canManageUsers: canManage,
     canEditUsers: administrator,
     canCreateOrganization: administrator,
     canCreateUnassignedAccount: administrator,
-    userRoles: (canManage ? administrator ? ["VIEWER", "ANNOTATOR", "EDITOR", "OWNER"] : ["VIEWER"] : []) as OrganizationRole[],
+    userRoles: (canManage ? administrator ? ["VIEWER", "ANNOTATOR", "EDITOR", "OWNER"] : ["VIEWER", "ANNOTATOR", "EDITOR"] : []) as OrganizationRole[],
+    canChangeRole: (target: OrganizationUser) => canManage && (administrator || !target.membershipRole.includes("OWNER")),
     canRemoveUser: (target: OrganizationUser) =>
       canManage && target.username !== user?.username &&
       (administrator || !target.membershipRole.includes("OWNER")),

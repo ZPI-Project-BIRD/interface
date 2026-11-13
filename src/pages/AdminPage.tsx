@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Alert, Button, Checkbox, Form, Input, Modal, Typography } from "antd";
-import { useMutation } from "react-query";
+import { Alert, Button, Checkbox, Form, Input, Modal, Tabs, Typography } from "antd";
+import { useMutation, useQueryClient } from "react-query";
 import { Link, useNavigate } from "react-router";
 import { api } from "../api";
 import type { CreateUnassignedUserPayload } from "../api/contracts/users";
@@ -10,9 +10,12 @@ import { AccessFeedback } from "../components/AccessFeedback";
 import { useAuthStore, isCurrentSession, withSession } from "../stores/authStore";
 import { privateQueryKey } from "../queryClient";
 import { isAdministrator, isPermissionDenied } from "../permissions/organizationCapabilities";
+import { AdminOrganizations } from "../components/admin/AdminOrganizations";
+import { AdminUsers } from "../components/admin/AdminUsers";
 
 export default function AdminPage() {
   const navigate = useNavigate();
+  const client = useQueryClient();
   const sessionId = useAuthStore((state) => state.sessionId);
   const user = useAuthStore((state) => state.user);
   const [organizationId, setOrganizationId] = useState("");
@@ -30,6 +33,7 @@ export default function AdminPage() {
         setCreatedOrganization(organization);
         setOrganizationId(organization.id);
         organizationForm.resetFields();
+        void client.invalidateQueries(privateQueryKey(sessionId, "organizations", "all"));
       },
     },
   );
@@ -40,6 +44,8 @@ export default function AdminPage() {
       onSuccess: ({ user, password }) => {
         if (!isCurrentSession(sessionId)) return;
         userForm.resetFields();
+        void client.invalidateQueries(privateQueryKey(sessionId, "platform-users"));
+        void client.invalidateQueries(privateQueryKey(sessionId, "user-picker"));
         modal.success({ title: "Account created", content: <div>
           <p>{user.username} was created without an organization.</p>
           <p>Temporary password: <Typography.Text code copyable>{password}</Typography.Text></p>
@@ -51,13 +57,17 @@ export default function AdminPage() {
   const encodedOrganizationId = encodeURIComponent(organizationId.trim());
   const failure = createOrganization.error ?? createUser.error;
   if (isPermissionDenied(failure)) return <CrudPageLayout><AccessFeedback error={failure} onRetry={() => window.location.reload()} /></CrudPageLayout>;
-  return <CrudPageLayout headerAction={<Link to="/projects"><Button>Back to projects</Button></Link>}>
+  return <CrudPageLayout headerAction={/**<Link to="/projects"><Button>Back to projects</Button></Link>**/<></>}>
     {modalContext}
     <CrudPageHeader title="Administration" actions={null} />
+    <Tabs items={[
+      { key: "organizations", label: "Organizations", children: <AdminOrganizations /> },
+      { key: "accounts", label: "Accounts", children: <AdminUsers /> },
+    ]} />
     <div className="grid gap-5 lg:grid-cols-2">
       <section className="border border-[#c9d0d5] bg-white p-6">
         <Typography.Title level={3}>Open by ID</Typography.Title>
-        <Typography.Paragraph>Enter a known organization or project ID. Searching across all organizations is not available yet.</Typography.Paragraph>
+        <Typography.Paragraph>Open a specific organization or project directly using its ID.</Typography.Paragraph>
         <Form layout="vertical">
           <Form.Item label="Organization ID"><Input value={organizationId} onChange={(event) => setOrganizationId(event.target.value)} /></Form.Item>
           <div className="mb-4 flex flex-wrap gap-2">

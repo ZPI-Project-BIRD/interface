@@ -21,6 +21,7 @@ import {
   type OrganizationUser,
 } from "../../api";
 import { OrganizationUserEditor } from "../../components/OrganizationUserEditor";
+import { AddExistingMemberModal } from "../../components/AddExistingMemberModal";
 import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
@@ -89,10 +90,11 @@ function OrganizationsPage() {
   const { organizationId } = useParams();
   const navigate = useNavigate();
   const organizations = useOrganizations();
-  const selectedOrganizationId = organizationId ?? organizations.manageable[0]?.organization.id;
+  const selectedOrganizationId = organizationId ?? (organizations.administrator ? organizations.available[0]?.id : organizations.manageable[0]?.organization.id);
   const access = useOrganizationCapabilities(selectedOrganizationId);
   const [editingUser, setEditingUser] = useState<{ organizationId: string; user: OrganizationUser }>();
   const [addUserOrganizationId, setAddUserOrganizationId] = useState<string>();
+  const [assignOrganizationId, setAssignOrganizationId] = useState<string>();
   const [addUserForm] = Form.useForm<AddUserFormValues>();
   const [messageApi, messageContextHolder] = message.useMessage();
   const [modalApi, modalContextHolder] = Modal.useModal();
@@ -162,15 +164,15 @@ function OrganizationsPage() {
 
   const handleAddUser = (values: AddUserFormValues) => {
     if (selectedOrganizationId && access.canManageUsers && access.userRoles.includes(values.membershipRole)) {
-      addUserMutation.mutate({ ...values, membershipRole: access.administrator ? values.membershipRole : "VIEWER", organizationId: selectedOrganizationId });
+      addUserMutation.mutate({ ...values, organizationId: selectedOrganizationId });
     }
   };
 
   const userColumns: TableColumnsType<OrganizationUser> = [
     ...baseUserColumns,
-    ...(access.canEditUsers ? [{
+    ...(access.canManageUsers ? [{
       title: "Edit", key: "edit", width: 100,
-      render: (_: unknown, user: OrganizationUser) => user.username !== username
+      render: (_: unknown, user: OrganizationUser) => access.canChangeRole(user) || (access.canEditUsers && user.username !== username)
         ? <Button size="small" onClick={() => setEditingUser({ organizationId: selectedOrganizationId!, user })}>Edit user</Button> : null,
     }] : []),
     {
@@ -224,7 +226,9 @@ function OrganizationsPage() {
     <CrudPageLayout>
       {messageContextHolder}
       {modalContextHolder}
-      {editingUser && editingUser.organizationId === selectedOrganizationId && selectedOrganizationId && access.canEditUsers && <OrganizationUserEditor
+      {assignOrganizationId === selectedOrganizationId && selectedOrganizationId && access.canManageUsers && <AddExistingMemberModal
+        organizationId={selectedOrganizationId} memberIds={usersQuery.data?.map(({ id }) => id) ?? []} onClose={() => setAssignOrganizationId(undefined)} />}
+      {editingUser && editingUser.organizationId === selectedOrganizationId && selectedOrganizationId && access.canManageUsers && <OrganizationUserEditor
         key={`${selectedOrganizationId}:${editingUser.user.id}`}
         organizationId={selectedOrganizationId} user={editingUser.user} onClose={() => setEditingUser(undefined)}
       />}
@@ -246,8 +250,8 @@ function OrganizationsPage() {
               placeholder="Select organization"
               className="w-full max-w-75"
               options={[
-                ...access.manageable.map(({ organization }) => ({ label: organization.name, value: organization.id })),
-                ...(selectedOrganizationId && !access.manageable.some(({ organization }) => organization.id === selectedOrganizationId)
+                ...(access.administrator ? access.available : access.manageable.map(({ organization }) => organization)).map((organization) => ({ label: organization.name, value: organization.id })),
+                ...(selectedOrganizationId && !(access.administrator ? access.available : access.manageable.map(({ organization }) => organization)).some(({ id }) => id === selectedOrganizationId)
                   ? [{ label: selectedOrganizationId, value: selectedOrganizationId }] : []),
               ]}
             />
@@ -257,8 +261,9 @@ function OrganizationsPage() {
               disabled={!selectedOrganizationId || !access.canManageUsers}
               onClick={() => setAddUserOrganizationId(selectedOrganizationId)}
             >
-              Add user
+              Create account
             </Button>
+            <Button disabled={!selectedOrganizationId || !access.canManageUsers} onClick={() => setAssignOrganizationId(selectedOrganizationId)}>Assign existing account</Button>
           </>
         }
       />

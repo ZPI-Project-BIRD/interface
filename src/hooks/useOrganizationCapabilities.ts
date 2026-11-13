@@ -8,17 +8,23 @@ export function useOrganizations() {
   const user = useAuthStore((state) => state.user);
   const sessionId = useAuthStore((state) => state.sessionId);
   const loggingOut = useAuthStore((state) => state.loggingOut);
+  const administrator = isAdministrator(user);
+  const allQuery = useQuery(
+    privateQueryKey(sessionId, "organizations", "all"),
+    ({ signal }) => api.organizations.getAll({ signal }),
+    { enabled: administrator && !loggingOut, staleTime: 60_000 },
+  );
   const query = useQuery(
     privateQueryKey(sessionId, "organizations", "my"),
     ({ signal }) => api.organizations.getMy({ signal }),
     { enabled: Boolean(user) && !loggingOut, staleTime: 60_000 },
   );
-  const administrator = isAdministrator(user);
   // Refetching or a failed background check must not leave stale privileges usable.
   const ready = query.isSuccess && !query.isFetching && !loggingOut;
   const memberships = ready ? query.data : [];
   return {
-    query, administrator, memberships,
+    query, allQuery, administrator, memberships,
+    available: administrator ? allQuery.data ?? [] : memberships.map(({ organization }) => organization),
     editable: memberships.filter((membership) => organizationCapabilities(user, membership).canCreateProject),
     manageable: memberships.filter((membership) => organizationCapabilities(user, membership).canManageUsers),
   };
@@ -51,7 +57,8 @@ export function useOrganizationCapabilities(organizationId?: string) {
     ...capabilities,
     administrator: organizations.administrator,
     state,
-    organization: membership?.organization ?? (organizationId ? { id: organizationId, name: organizationId } : undefined),
+    organization: membership?.organization ?? organizations.allQuery.data?.find(({ id }) => id === organizationId)
+      ?? (organizationId ? { id: organizationId, name: organizationId } : undefined),
     reportError: (error: unknown, id = organizationId) => {
       if (id) reportOrganizationDenial(client, sessionId, id, error);
     },
