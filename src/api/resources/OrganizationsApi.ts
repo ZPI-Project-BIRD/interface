@@ -3,6 +3,7 @@ import type { Organization, OrganizationMembership } from "../contracts/organiza
 import type {
   CreateOrganizationUserPayload,
   CreatedOrganizationUser,
+  OrganizationRole,
 } from "../contracts/users";
 
 export class OrganizationsApi {
@@ -14,6 +15,26 @@ export class OrganizationsApi {
 
   async create(name: string): Promise<Organization> {
     return this.client.post("/organizations", { name });
+  }
+
+  getAll(options?: ApiMethodOptions): Promise<Organization[]> {
+    return this.client.get("/organizations", options);
+  }
+
+  rename(organizationId: string, name: string): Promise<Organization> {
+    return this.client.patch(`/organizations/${encodeURIComponent(organizationId)}`, { name });
+  }
+
+  delete(organizationId: string): Promise<void> {
+    return this.client.delete(`/organizations/${encodeURIComponent(organizationId)}`);
+  }
+
+  addMembership(organizationId: string, userId: string, membershipRole: OrganizationRole): Promise<OrganizationMembership> {
+    return this.client.post(`/organizations/${encodeURIComponent(organizationId)}/memberships`, { userId, membershipRole });
+  }
+
+  updateUserRole(organizationId: string, username: string, membershipRole: OrganizationRole): Promise<OrganizationMembership> {
+    return this.client.patch(`/organizations/${encodeURIComponent(organizationId)}/users/${encodeURIComponent(username)}/role`, { membershipRole });
   }
 
   async updateUserFullName(organizationId: string, username: string, fullName: string) {

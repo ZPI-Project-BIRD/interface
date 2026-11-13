@@ -10,6 +10,14 @@ export interface OrganizationUser {
 
 export type OrganizationRole = "VIEWER" | "ANNOTATOR" | "EDITOR" | "OWNER";
 
+export type PlatformUser = Omit<OrganizationUser, "membershipRole"> & { membershipRole: null };
+
+export interface UserSearch {
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface CreateOrganizationUserPayload {
   friendlyName: string;
   username: string;

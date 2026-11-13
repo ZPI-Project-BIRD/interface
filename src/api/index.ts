@@ -32,12 +32,17 @@ export type {
   Project,
   ProjectProgress,
   StageProgress,
+  DiscoveryStatus,
+  DetectionState,
+  AnnotationHistoryEntry,
+  SourceFeature,
 } from "./contracts/projects";
 export type {
   CreateOrganizationUserPayload,
   CreatedOrganizationUser,
   OrganizationRole,
   OrganizationUser,
+  PlatformUser,
 } from "./contracts/users";
 export type {
   CurrentUser,
