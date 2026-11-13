@@ -1,13 +1,14 @@
 import { useCallback, useState } from "react";
 import { Alert, Button, Flex, Form, Input, Select, Typography, message } from "antd";
-import { useMutation } from "react-query";
+import { useMutation, useQuery, useQueryClient } from "react-query";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { api, type CreateProjectPayload } from "../../api";
 import { Map, type RectangleBounds } from "../../components/Map";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
-import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
+import { isCurrentSession, useAuthStore } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
+import { creationKey, getProjectCreationFlow, type CreationState } from "../../projects/projectCreation";
 import { useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
+import { ProjectCreationRecovery } from "../../components/project/ProjectCreationRecovery";
 import { AccessFeedback } from "../../components/AccessFeedback";
 
 const EARTH_RADIUS_KILOMETERS = 6_371.0088;
@@ -34,58 +35,44 @@ function calculateRectangleAreaKm2(rectangle: RectangleBounds) {
   return EARTH_RADIUS_KILOMETERS ** 2 * longitudeSpan * (Math.sin(north) - Math.sin(south));
 }
 
-function toCreateProjectPayload(name: string, rectangle: RectangleBounds): CreateProjectPayload {
-  return {
-    name: name.trim(),
-    topLeft: {
-      latitude: rectangle.north,
-      longitude: rectangle.west,
-    },
-    bottomRight: {
-      latitude: rectangle.south,
-      longitude: rectangle.east,
-    },
-  };
-}
-
 function CreateProjectPage() {
   const [searchParams] = useSearchParams();
+  const sessionId = useAuthStore((state) => state.sessionId);
+  const queryClient = useQueryClient();
+  const flow = getProjectCreationFlow(queryClient, sessionId);
+  const creationQuery = useQuery<CreationState | null>(creationKey(sessionId), { enabled: false, initialData: null, cacheTime: Infinity });
+  const initialSubmission = flow.state?.outcome !== "accepted" ? flow.state?.submission : undefined;
   const [form] = Form.useForm<ProjectFormValues>();
-  const [rectangle, setRectangle] = useState<RectangleBounds | null>(null);
+  const [rectangle, setRectangle] = useState<RectangleBounds | null>(initialSubmission?.rectangle ?? null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [messageApi, messageContextHolder] = message.useMessage();
   const navigate = useNavigate();
   const organizationId = Form.useWatch("organizationId", { form, preserve: true });
   const projectName = Form.useWatch("name", form);
-  const sessionId = useAuthStore((state) => state.sessionId);
   const access = useOrganizationCapabilities(organizationId);
   const organizationsQuery = access.query;
 
   const createProjectMutation = useMutation(
-    ({
-      organizationId: selectedOrganizationId,
-      name,
-      rectangle: selectedRectangle,
-    }: CreateProjectVariables) =>
-      withSession(sessionId, () =>
-        api.projects.create(selectedOrganizationId, toCreateProjectPayload(name, selectedRectangle)),
-      ),
+    (values: CreateProjectVariables) => flow.submit(values),
     {
       mutationKey: privateQueryKey(sessionId, "create-project"),
+      retry: false,
       onSuccess: (project) => {
-        if (!isCurrentSession(sessionId)) return;
+        if (!isCurrentSession(sessionId) || !project) return;
         navigate(`/projects/${project.organizationId}/${project.id}`, { replace: true });
       },
-      onError: (error, variables) => {
+      onError: (error) => {
         if (!isCurrentSession(sessionId)) return;
-        access.reportError(error, variables.organizationId);
-        messageApi.error(error instanceof Error ? error.message : "Unable to create the project.");
+        access.reportError(error, flow.state?.submission.organizationId);
       },
     },
   );
+  const creation = creationQuery.data;
+  const locked = creation?.outcome === "pending" || creation?.outcome === "unknown" || Boolean(creation?.checking);
 
   const handleRectangleDraw = useCallback(
     (nextRectangle: RectangleBounds) => {
+      if (flow.locked) return;
       if (nextRectangle.north <= nextRectangle.south || nextRectangle.east <= nextRectangle.west) {
         messageApi.error("Draw a rectangle with a non-zero width and height.");
         return;
@@ -103,11 +90,11 @@ function CreateProjectPage() {
 
       setRectangle(nextRectangle);
     },
-    [messageApi],
+    [messageApi, flow],
   );
 
   const handleSubmit = (values: ProjectFormValues) => {
-    if (!access.canCreateProject || values.organizationId !== organizationId) return;
+    if (flow.locked || !access.canCreateProject || values.organizationId !== organizationId) return;
     if (!rectangle) {
       messageApi.error("Draw a project area on the map before continuing.");
       return;
@@ -117,7 +104,7 @@ function CreateProjectPage() {
   };
 
   const isFormComplete = Boolean(organizationId && projectName?.trim());
-  const canSubmit = access.canCreateProject && isFormComplete && Boolean(rectangle) && !createProjectMutation.isLoading;
+  const canSubmit = access.canCreateProject && isFormComplete && Boolean(rectangle) && !locked && !createProjectMutation.isLoading;
   const areaKm2 = rectangle ? calculateRectangleAreaKm2(rectangle) : null;
 
   if (access.state !== "ready" || (!access.administrator && (organizationId ? !access.canCreateProject : access.editable.length === 0))) {
@@ -147,12 +134,21 @@ function CreateProjectPage() {
             Enter the project details, then draw its rectangular area on the map.
           </Typography.Paragraph>
 
+          {creation && ["unknown", "acknowledged"].includes(creation.outcome) && <ProjectCreationRecovery creation={creation} flow={flow} />}
+          {creation?.outcome === "not-submitted" && <Alert className="mb-5" type="error" showIcon title="Project was not submitted"
+            description={`${creation.error} The preliminary project check failed before any creation request was sent. Your name and area are retained; you can try submitting again.`} />}
+          {creation?.outcome === "rejected" && <Alert className="mb-5" type="error" showIcon title="Project creation rejected"
+            description={`${creation.error} Your name and area are retained; correct the request before submitting again.`} />}
+          {creation?.outcome === "pending" && <Alert className="mb-5" type="info"
+            title={creation.phase === "checking" ? "Checking existing projects…" : "Creating project…"}
+            description="Your submitted name and area are retained. A second creation request will not be sent while this one is pending." />}
+
           <Form<ProjectFormValues>
             form={form}
             layout="vertical"
             requiredMark={false}
-            disabled={createProjectMutation.isLoading}
-            initialValues={{ organizationId: searchParams.get("organizationId") ?? undefined }}
+            disabled={locked || createProjectMutation.isLoading}
+            initialValues={{ organizationId: initialSubmission?.organizationId ?? searchParams.get("organizationId") ?? undefined, name: initialSubmission?.name }}
             onFinish={handleSubmit}
           >
             <Form.Item
@@ -160,13 +156,18 @@ function CreateProjectPage() {
               name="organizationId"
               rules={[{ required: true, message: "Please select an organization." }]}
             >
-              {access.administrator ? <Input placeholder="Enter a known organization ID" autoComplete="off" /> : (
+              {access.administrator && access.allQuery.isError ? <Input placeholder="Enter a known organization ID" autoComplete="off" /> : (
                 <Select
                   showSearch
                   optionFilterProp="label"
-                  loading={organizationsQuery.isLoading}
+                  loading={access.administrator ? access.allQuery.isLoading : organizationsQuery.isLoading}
                   placeholder="Select organization"
-                  options={access.editable.map(({ organization }) => ({ label: organization.name, value: organization.id }))}
+                  options={[
+                    ...(access.administrator ? access.available : access.editable.map(({ organization }) => organization))
+                      .map((organization) => ({ label: organization.name, value: organization.id })),
+                    ...(access.administrator && organizationId && !access.available.some(({ id }) => id === organizationId)
+                      ? [{ label: organizationId, value: organizationId }] : []),
+                  ]}
                   notFoundContent={
                     organizationsQuery.isLoading
                       ? "Loading organizations…"
@@ -232,7 +233,7 @@ function CreateProjectPage() {
                 disabled={!canSubmit}
                 loading={createProjectMutation.isLoading}
               >
-                Create project
+                {creation?.outcome === "acknowledged" ? "Create another project" : "Create project"}
               </Button>
             </Form.Item>
           </Form>
@@ -240,14 +241,14 @@ function CreateProjectPage() {
 
         <section className="relative min-h-140 overflow-hidden border border-[#c9d0d5] bg-neutral-200 lg:min-h-[680px]">
           <Map
-            mode="draw-rectangle"
+            mode={locked ? "browse" : "draw-rectangle"}
             rectangle={rectangle}
             onRectangleDraw={handleRectangleDraw}
             onDrawingChange={setIsDrawing}
           />
           <div className="pointer-events-none absolute top-4 left-1/2 z-500 -translate-x-1/2 border border-[#aeb8bf] bg-white/95 px-4 py-2">
             <Typography.Text className="whitespace-nowrap">
-              {isDrawing
+              {locked ? "Submitted area retained" : isDrawing
                 ? "Click to place the opposite corner · Esc to cancel"
                 : rectangle
                   ? "Click to start a new area"

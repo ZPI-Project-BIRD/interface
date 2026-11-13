@@ -12,6 +12,7 @@ import {
 import { useQuery, useQueryClient } from "react-query";
 import { Link, useSearchParams } from "react-router";
 import { api, type Organization, type Project } from "../../api";
+import type { ProjectGroup } from "../../projects/projectCache";
 import CrudPageHeader from "../../components/CrudPageHeader";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { useAuthStore } from "../../stores/authStore";
@@ -20,11 +21,6 @@ import { ProjectStatus } from "../../components/project/ProjectStatus";
 import { AccessFeedback } from "../../components/AccessFeedback";
 import { reportOrganizationDenial, useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
 import { PolandMiniMap } from "../../components/project/PolandMiniMap";
-
-interface ProjectGroup {
-  organization: Organization;
-  projects: Project[];
-}
 
 const projectColumns: TableColumnsType<Project> = [
   {
@@ -91,15 +87,21 @@ function ProjectsPage() {
   const selectedOrganizationId = searchParams.get("organizationId") || undefined;
   const access = useOrganizationCapabilities(selectedOrganizationId);
   const queryClient = useQueryClient();
+  const knownOrganizations = useQuery<Organization[]>(privateQueryKey(sessionId, "known-project-organizations"), { enabled: false, initialData: [], cacheTime: Infinity });
+  const organizations = Array.from(new globalThis.Map([
+    ...(access.administrator ? access.available : []).map((organization) => [organization.id, organization] as const),
+    ...(access.query.data ?? []).map(({ organization }) => [organization.id, organization] as const),
+    ...(access.administrator ? (knownOrganizations.data ?? []).filter(({ id }) => !access.query.data?.some(({ organization }) => organization.id === id)) : []).map((organization) => [organization.id, organization] as const),
+  ]).values());
   const projectsQuery = useQuery(
-    privateQueryKey(sessionId, "projects", selectedOrganizationId, access.query.data?.map(({ organization }) => organization.id)),
+    privateQueryKey(sessionId, "projects", selectedOrganizationId, organizations.map(({ id }) => id)),
     ({ signal }) => getProjects(selectedOrganizationId
       ? [access.organization!]
-      : (access.query.data ?? []).map(({ organization }) => organization), async (organizationId) => {
+      : organizations, async (organizationId) => {
       try { return await api.projects.getAll(organizationId, { signal }); }
       catch (error) { reportOrganizationDenial(queryClient, sessionId, organizationId, error); throw error; }
     }),
-    { enabled: selectedOrganizationId ? access.state === "ready" && access.canRead : access.query.isSuccess },
+    { enabled: selectedOrganizationId ? access.state === "ready" && access.canRead : access.administrator ? access.allQuery.isSuccess : access.query.isSuccess },
   );
   const groups = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const visibleGroups = useMemo(() => {
@@ -133,11 +135,12 @@ function ProjectsPage() {
     </Link>
   ) : null;
 
-  const canShowProjects = selectedOrganizationId ? access.state === "ready" : access.query.isSuccess;
+  const listQuery = access.administrator ? access.allQuery : access.query;
+  const canShowProjects = selectedOrganizationId ? access.state === "ready" : listQuery.isSuccess;
   return (
     <CrudPageLayout>
       <CrudPageHeader
-        title={selectedOrganizationId ? `Projects · ${access.organization?.name ?? selectedOrganizationId}` : "My projects"}
+        title={selectedOrganizationId ? `Projects · ${access.organization?.name ?? selectedOrganizationId}` : access.administrator ? "All projects" : "My projects"}
         actions={
           <>
             <Select
@@ -164,8 +167,8 @@ function ProjectsPage() {
 
       <section>
         {selectedOrganizationId && access.state !== "ready" && <AccessFeedback state={access.state} error={access.query.error} onRetry={() => void access.retry()} />}
-        {!selectedOrganizationId && access.query.isError && <AccessFeedback error={access.query.error} onRetry={() => void access.retry()} />}
-        {!selectedOrganizationId && access.query.isLoading && <Typography.Paragraph>Loading organizations…</Typography.Paragraph>}
+        {!selectedOrganizationId && listQuery.isError && <AccessFeedback error={listQuery.error} onRetry={() => void listQuery.refetch()} />}
+        {!selectedOrganizationId && listQuery.isLoading && <Typography.Paragraph>Loading organizations…</Typography.Paragraph>}
         {canShowProjects && projectsQuery.isLoading && (
           <Table<ProjectGroup>
             className="[&_.ant-table-thead>tr>th]:!bg-[#f6f8fa]"
