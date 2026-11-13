@@ -101,6 +101,12 @@ interface MapProps {
   focusBounds?: L.LatLngBounds | null;
   onRectangleDraw?: (rectangle: RectangleBounds) => void;
   onDrawingChange?: (drawing: boolean) => void;
+  onPolygonSelect?: (id: string) => void;
+  editableRings?: L.LatLng[][];
+  onRingsChange?: (rings: L.LatLng[][]) => void;
+  drawingPolygon?: boolean;
+  onPolygonDraw?: (ring: L.LatLng[]) => void;
+  onPolygonDrawCancel?: () => void;
 }
 
 export function Map({
@@ -112,9 +118,16 @@ export function Map({
   focusBounds,
   onRectangleDraw,
   onDrawingChange,
+  onPolygonSelect,
+  editableRings,
+  onRingsChange,
+  drawingPolygon = false,
+  onPolygonDraw,
+  onPolygonDrawCancel,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const lastFocusRef = useRef<L.LatLngBounds | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -197,6 +210,7 @@ export function Map({
       resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
+      lastFocusRef.current = null;
     };
   }, [interactive, layer, mode]);
 
@@ -236,27 +250,92 @@ export function Map({
 
     const renderer = L.canvas({ padding: 0.5 });
     const layer = L.layerGroup(
-      polygons.map(({ rings, highlighted }) =>
-        L.polygon(rings, {
+      polygons.map(({ id, rings, highlighted }) => {
+        const polygon = L.polygon(rings, {
           renderer,
-          interactive: false,
+          interactive: Boolean(onPolygonSelect),
           color: highlighted ? "#22d3ee" : "#f59e0b",
           fillOpacity: highlighted ? 0.45 : 0.25,
           weight: highlighted ? 2 : 1.5,
-        }),
-      ),
+        });
+        if (onPolygonSelect) polygon.on("click", () => onPolygonSelect(id));
+        return polygon;
+      }),
     ).addTo(map);
 
     return () => {
       layer.remove();
+      renderer.remove();
     };
-  }, [polygons]);
+  }, [polygons, onPolygonSelect]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !editableRings || !onRingsChange) return;
+    const rings = editableRings.map((ring) => ring.map((point) => L.latLng(point.lat, point.lng)));
+    const outline = L.polygon(rings, { color: "#22d3ee", fillOpacity: 0.3, interactive: false }).addTo(map);
+    const handles: L.Marker[] = [];
+    rings.forEach((ring, ringIndex) => {
+      // The final point repeats the first point; dragging the first updates both.
+      ring.slice(0, -1).forEach((point, index) => {
+        const handle = L.marker(point, { draggable: true, keyboard: true,
+          title: `Outline ${ringIndex + 1}, corner ${index + 1}`,
+          icon: L.divIcon({ className: "annotation-vertex", html: '<span style="display:block;width:14px;height:14px;border:2px solid #123f5d;background:white;border-radius:50%"></span>', iconSize: [14, 14], iconAnchor: [7, 7] }),
+        }).addTo(map);
+        handle.on("drag", () => {
+          rings[ringIndex][index] = handle.getLatLng();
+          if (index === 0) rings[ringIndex][ring.length - 1] = handle.getLatLng();
+          outline.setLatLngs(rings);
+        });
+        handle.on("dragend", () => onRingsChange(rings));
+        handles.push(handle);
+      });
+    });
+    return () => { outline.remove(); handles.forEach((handle) => handle.remove()); };
+  }, [editableRings, onRingsChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !drawingPolygon || !onPolygonDraw) return;
+    const points: L.LatLng[] = [];
+    const drawing = L.polyline([], { color: "#22d3ee", interactive: false }).addTo(map);
+    const corners: L.CircleMarker[] = [];
+    const cursor = map.getContainer().style.cursor;
+    const doubleClickZoom = map.doubleClickZoom.enabled();
+    map.getContainer().style.cursor = "crosshair";
+    map.doubleClickZoom.disable();
+    const finish = () => { if (points.length >= 3) onPolygonDraw([...points, points[0]]); };
+    const click = (event: L.LeafletMouseEvent) => {
+      const previous = points.at(-1);
+      if (previous && map.latLngToContainerPoint(previous).distanceTo(event.containerPoint) < 3) return;
+      points.push(event.latlng);
+      drawing.setLatLngs(points);
+      const corner = L.circleMarker(event.latlng, { radius: 5, color: "#123f5d", fillColor: "white", fillOpacity: 1, bubblingMouseEvents: false }).addTo(map);
+      if (points.length === 1) corner.on("click", finish);
+      corners.push(corner);
+    };
+    const key = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement)?.closest("input,textarea,select")) return;
+      if (event.key === "Enter") { event.preventDefault(); finish(); }
+      if (event.key === "Escape") onPolygonDrawCancel?.();
+    };
+    map.on("click", click);
+    map.on("dblclick", finish);
+    document.addEventListener("keydown", key);
+    return () => {
+      map.off("click", click); map.off("dblclick", finish); document.removeEventListener("keydown", key);
+      drawing.remove(); corners.forEach((corner) => corner.remove());
+      map.getContainer().style.cursor = cursor;
+      if (doubleClickZoom) map.doubleClickZoom.enable();
+    };
+  }, [drawingPolygon, onPolygonDraw, onPolygonDrawCancel]);
 
   useEffect(() => {
     const map = mapRef.current;
 
-    if (map && focusBounds?.isValid()) {
+    if (map && focusBounds?.isValid() && !lastFocusRef.current?.equals(focusBounds)) {
       map.fitBounds(focusBounds, { maxZoom: 16, padding: [40, 40] });
+      lastFocusRef.current = focusBounds;
     }
   }, [focusBounds]);
 

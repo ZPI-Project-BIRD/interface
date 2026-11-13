@@ -1,42 +1,33 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Button, Flex, Spin, Typography, message } from "antd";
-import * as L from "leaflet";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, type FeatureDetections } from "../../api";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
-import { Map, type MapPolygon, type RectangleBounds } from "../../components/Map";
 import { ProjectProgressCard } from "../../components/project/ProjectProgressCard";
 import { ProjectDangerZone } from "../../components/project/ProjectDangerZone";
 import { DetectionList, type SheetDetections } from "../../components/project/DetectionList";
 import { calculateAreaKm2 } from "../../geo/area";
-import { planarToLatLng, polygonAreaM2 } from "../../geo/projections";
+import { polygonAreaM2 } from "../../geo/projections";
 import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
 import { useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
 import { AccessFeedback } from "../../components/AccessFeedback";
 import { isPermissionDenied } from "../../permissions/organizationCapabilities";
+import { AnnotationWorkspace } from "../../components/project/AnnotationWorkspace";
 import { ProcessingRecovery } from "../../components/project/ProcessingRecovery";
 import { SourceFeatures } from "../../components/project/SourceFeatures";
 
 const PROGRESS_REFRESH_SECONDS = 10;
 const DETECTIONS_REFRESH_SECONDS = 30;
 
-interface SheetGeometry extends SheetDetections {
-  /** Building polygons as Leaflet rings (outer ring first). */
-  polygons: L.LatLng[][][];
-}
-
-function toSheetGeometry({ featureId, detections }: FeatureDetections): SheetGeometry {
+function toSheetGeometry({ featureId, detections }: FeatureDetections): SheetDetections {
   const polygons = detections.flatMap((detection) => detection.bounds ?? []);
 
   return {
     featureId,
     buildingCount: polygons.length,
     footprintAreaM2: polygons.reduce((sum, polygon) => sum + polygonAreaM2(polygon), 0),
-    polygons: polygons.map((rings) =>
-      rings.map((ring) => ring.map(planarToLatLng).filter((point) => point !== null)),
-    ),
   };
 }
 
@@ -79,7 +70,6 @@ function ProjectPage() {
     ({ signal }) => api.projects.getDetections(organizationId!, projectId!, { signal }),
     { enabled: projectLoaded, refetchInterval: DETECTIONS_REFRESH_SECONDS * 1000, onError: access.reportError },
   );
-
   const featuresQuery = useQuery(
     privateQueryKey(sessionId, "project-features", organizationId, projectId),
     ({ signal }) => api.projects.getFeatures(organizationId!, projectId!, { signal }),
@@ -93,7 +83,7 @@ function ProjectPage() {
       onSuccess: () => {
         if (!isCurrentSession(sessionId)) return;
         // Stop the polling queries before leaving so they do not refetch a deleted project.
-        for (const key of ["project", "project-progress", "project-detections", "project-features"]) {
+        for (const key of ["project", "project-progress", "project-detections", "project-features", "annotation-history"]) {
           queryClient.removeQueries(privateQueryKey(sessionId, key, organizationId, projectId));
         }
         void queryClient.invalidateQueries(privateQueryKey(sessionId, "projects"));
@@ -107,19 +97,6 @@ function ProjectPage() {
     },
   );
 
-  const project = projectQuery.data;
-  const rectangle = useMemo<RectangleBounds | null>(
-    () =>
-      project
-        ? {
-            north: project.topLeft.latitude,
-            east: project.bottomRight.longitude,
-            south: project.bottomRight.latitude,
-            west: project.topLeft.longitude,
-          }
-        : null,
-    [project],
-  );
   const sheets = useMemo(
     () =>
       detectionsQuery.data
@@ -127,23 +104,6 @@ function ProjectPage() {
         .filter((sheet) => sheet.buildingCount > 0)
         .toSorted((left, right) => right.buildingCount - left.buildingCount),
     [detectionsQuery.data],
-  );
-  const mapPolygons = useMemo<MapPolygon[]>(
-    () =>
-      sheets?.flatMap((sheet) =>
-        sheet.polygons.map((rings, index) => ({
-          id: `${sheet.featureId}:${index}`,
-          rings,
-          highlighted: sheet.featureId === selectedFeatureId,
-        })),
-      ) ?? [],
-    [sheets, selectedFeatureId],
-  );
-  const selectedSheet = sheets?.find((sheet) => sheet.featureId === selectedFeatureId);
-  const focusBounds = useMemo(
-    () =>
-      selectedSheet ? L.latLngBounds(selectedSheet.polygons.flatMap(([outer]) => outer)) : null,
-    [selectedSheet],
   );
 
   const backButton = (
@@ -219,7 +179,6 @@ function ProjectPage() {
             selectedFeatureId={selectedFeatureId}
             onSelect={setSelectedFeatureId}
           />
-
           <SourceFeatures features={featuresQuery.data} loading={featuresQuery.isLoading} error={featuresQuery.error} onRetry={() => void featuresQuery.refetch()} />
 
           {access.state === "error" && <AccessFeedback state="error" error={access.query.error} onRetry={() => void access.retry()} />}
@@ -233,7 +192,8 @@ function ProjectPage() {
         </aside>
 
         <section className="min-h-[360px] flex-1 bg-neutral-200">
-          <Map mode="browse" rectangle={rectangle} polygons={mapPolygons} focusBounds={focusBounds} />
+          <AnnotationWorkspace key={`${organizationId}:${projectId}`} project={projectQuery.data} groups={detectionsQuery.data}
+            features={featuresQuery.data} selectedFeatureId={selectedFeatureId} />
         </section>
       </div>
     </CrudPageLayout>
