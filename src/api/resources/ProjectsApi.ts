@@ -75,6 +75,10 @@ export class ProjectsApi {
     return this.client.post(`${this.projectPath(organizationId, projectId)}/detections/retry`);
   }
 
+  rerunDetections(organizationId: string, projectId: string): Promise<{ requeuedJobs: number }> {
+    return this.client.post(`${this.projectPath(organizationId, projectId)}/detections/rerun`);
+  }
+
   retryDiscovery(organizationId: string, projectId: string): Promise<DiscoveryStatus> {
     return this.client.post(`${this.projectPath(organizationId, projectId)}/discovery/retry`);
   }
