@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { Card, Form, Input, Button, Checkbox, Flex, Popconfirm } from "antd";
+import { Card, Form, Input, Button, Flex, Popconfirm } from "antd";
 import { UserOutlined, EyeOutlined, EyeInvisibleOutlined } from "@ant-design/icons";
 
 interface LoginFormValues {
   username: string;
   password: string;
-  remember: boolean;
 }
 
 export interface LoginFormProps {
@@ -22,7 +21,6 @@ const LoginForm = ({ onSubmit, loading = false }: LoginFormProps) => {
         layout="vertical"
         disabled={loading}
         requiredMark={false}
-        initialValues={{ remember: false }}
         onFinish={onSubmit}
       >
         <Form.Item
@@ -54,13 +52,10 @@ const LoginForm = ({ onSubmit, loading = false }: LoginFormProps) => {
         </Form.Item>
 
         <Flex vertical gap="large">
-          <Flex justify="space-between" align="center" gap="small" wrap>
-            <Form.Item name="remember" valuePropName="checked" noStyle>
-              <Checkbox>Remember me?</Checkbox>
-            </Form.Item>
+          <Flex justify="flex-end" align="center" gap="small" wrap>
             <Popconfirm
               title="Password recovery"
-              description="Please notify your organization's administrator to request a password reset."
+              description="Contact a global administrator to request a password reset."
               okText="Got it"
               showCancel={false}
               placement="topRight"

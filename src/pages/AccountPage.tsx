@@ -4,6 +4,7 @@ import { api, type CurrentUser, type UpdatePasswordPayload } from "../api";
 import CrudPageLayout from "../components/ProjectsPageLayout";
 import { isCurrentSession, useAuthStore, withSession } from "../stores/authStore";
 import { privateQueryKey } from "../queryClient";
+import { AccountAccess } from "../components/AccountAccess";
 
 interface FullNameFormValues {
   fullName: string;
@@ -172,6 +173,7 @@ function AccountPage() {
           </section>
         </div>
       )}
+      <AccountAccess />
     </CrudPageLayout>
   );
 }

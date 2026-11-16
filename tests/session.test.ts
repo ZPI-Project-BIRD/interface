@@ -3,6 +3,7 @@ import { isCancelledError, setLogger } from "react-query";
 import { apiClient, ApiError } from "../src/api";
 import { privateQueryKey } from "../src/queryClient";
 import { isCurrentSession, useAuthStore, withSession } from "../src/stores/authStore";
+import { annotationDraftKey, type AnnotationDraft } from "../src/projects/annotationDrafts";
 
 const alice = { username: "alice", authorities: [] };
 const bob = { username: "bob", authorities: [] };
@@ -53,6 +54,40 @@ afterEach(() => {
   fetchSpy.mockRestore();
 });
 afterAll(() => { setLogger(console); });
+
+const outlineDraft: AnnotationDraft = { id: "result", featureId: "sheet", expectedVersion: 7, crs: "EPSG:2180",
+  bounds: [[[[0, 0], [10, 0], [10, 10], [0, 0]]]] };
+
+test("kept drafts retain geometry and versions separately for each project and organization", async () => {
+  const session = await login();
+  const first = annotationDraftKey({ organizationId: "A", id: "project" });
+  const second = annotationDraftKey({ organizationId: "B", id: "project" });
+  session.setAnnotationDraft(session.sessionId, first, outlineDraft);
+  session.setAnnotationDraft(session.sessionId, second, { ...outlineDraft, expectedVersion: 2 });
+  session.setAnnotationDraft(session.sessionId, first, (draft) => ({ ...draft!, featureId: "corrected-sheet" }));
+  expect(useAuthStore.getState().annotationDrafts[first]).toMatchObject({ expectedVersion: 7, bounds: outlineDraft.bounds, featureId: "corrected-sheet" });
+  session.setAnnotationDraft(session.sessionId, first, undefined);
+  expect(useAuthStore.getState().annotationDrafts[first]).toBeUndefined();
+  expect(useAuthStore.getState().annotationDrafts[second].expectedVersion).toBe(2);
+});
+
+test("logging out clears drafts and stale callbacks cannot restore them for the next user", async () => {
+  const session = await login();
+  session.setAnnotationDraft(session.sessionId, "project", outlineDraft);
+  await session.logout();
+  expect(useAuthStore.getState().annotationDrafts).toEqual({});
+  await login("bob");
+  session.setAnnotationDraft(session.sessionId, "project", outlineDraft);
+  expect(useAuthStore.getState().annotationDrafts).toEqual({});
+});
+
+test("session expiration clears all unsaved annotation drafts", async () => {
+  const session = await login();
+  session.setAnnotationDraft(session.sessionId, "project", outlineDraft);
+  session.clearSession(true);
+  expect(useAuthStore.getState().annotationDrafts).toEqual({});
+  expect(useAuthStore.getState().sessionExpired).toBe(true);
+});
 
 test("logout clears query/mutation data before another user signs in", async () => {
   const a = await login();

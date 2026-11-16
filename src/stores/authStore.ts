@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { QueryClient } from "react-query";
 import { api, apiClient, ApiError, type AuthenticatedUser, type LoginCredentials } from "../api";
 import { createSessionQueryClient } from "../queryClient";
+import type { AnnotationDraft, DraftUpdate } from "../projects/annotationDrafts";
 
 interface AuthState {
   user: AuthenticatedUser | null;
@@ -12,6 +13,8 @@ interface AuthState {
   loggingOut: boolean;
   sessionExpired: boolean;
   error: string | null;
+  annotationDrafts: Record<string, AnnotationDraft>;
+  setAnnotationDraft: (sessionId: number, key: string, update: DraftUpdate) => void;
   initialize: () => Promise<void>;
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
@@ -39,6 +42,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       loggingOut,
       sessionExpired: expired,
       error: null,
+      annotationDrafts: {},
     });
   }
 
@@ -51,6 +55,15 @@ export const useAuthStore = create<AuthState>((set, get) => {
     loggingOut: false,
     sessionExpired: false,
     error: null,
+    annotationDrafts: {},
+    setAnnotationDraft: (sessionId, key, update) => set((state) => {
+      if (state.sessionId !== sessionId || !state.user || state.loggingOut) return state;
+      const draft = typeof update === "function" ? update(state.annotationDrafts[key]) : update;
+      const annotationDrafts = { ...state.annotationDrafts };
+      if (draft) annotationDrafts[key] = draft;
+      else delete annotationDrafts[key];
+      return { annotationDrafts };
+    }),
 
     initialize: async () => {
       if (get().initialized || get().loading) return;

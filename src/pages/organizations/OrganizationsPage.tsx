@@ -171,9 +171,9 @@ function OrganizationsPage() {
   const userColumns: TableColumnsType<OrganizationUser> = [
     ...baseUserColumns,
     ...(access.canManageUsers ? [{
-      title: "Edit", key: "edit", width: 100,
+      title: "Edit", key: "edit", width: 140,
       render: (_: unknown, user: OrganizationUser) => access.canChangeRole(user) || (access.canEditUsers && user.username !== username)
-        ? <Button size="small" onClick={() => setEditingUser({ organizationId: selectedOrganizationId!, user })}>Edit user</Button> : null,
+        ? <Button size="small" onClick={() => setEditingUser({ organizationId: selectedOrganizationId!, user })}>{access.canEditUsers ? "Edit account" : "Change role"}</Button> : null,
     }] : []),
     {
       title: "Actions",
@@ -236,11 +236,13 @@ function OrganizationsPage() {
         title="Manage organizations"
         actions={
           <>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             {access.administrator && <Input.Search
+              aria-label="Open organization by ID"
               placeholder="Open organization by ID"
               enterButton="Open"
               onSearch={(id) => { if (id.trim()) navigate(`/organizations/${encodeURIComponent(id.trim())}`); }}
-              className="max-w-96"
+              className="w-full sm:!w-80 sm:!min-w-64"
             />}
             <Select
               id="organization-select"
@@ -248,13 +250,16 @@ function OrganizationsPage() {
               onChange={(id) => { setAddUserOrganizationId(undefined); addUserForm.resetFields(); navigate(`/organizations/${id}`); }}
               loading={access.query.isLoading}
               placeholder="Select organization"
-              className="w-full max-w-75"
+              aria-label="Organization"
+              className="w-full sm:!w-64 sm:!min-w-48"
               options={[
                 ...(access.administrator ? access.available : access.manageable.map(({ organization }) => organization)).map((organization) => ({ label: organization.name, value: organization.id })),
                 ...(selectedOrganizationId && !(access.administrator ? access.available : access.manageable.map(({ organization }) => organization)).some(({ id }) => id === selectedOrganizationId)
                   ? [{ label: selectedOrganizationId, value: selectedOrganizationId }] : []),
               ]}
             />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             {selectedOrganizationId && <Link to={`/projects?organizationId=${encodeURIComponent(selectedOrganizationId)}`}><Button>Organization projects</Button></Link>}
             <Button
               type="primary"
@@ -264,9 +269,15 @@ function OrganizationsPage() {
               Create account
             </Button>
             <Button disabled={!selectedOrganizationId || !access.canManageUsers} onClick={() => setAssignOrganizationId(selectedOrganizationId)}>Assign existing account</Button>
+            </div>
           </>
         }
       />
+
+      <Typography.Paragraph type="secondary">
+        Organization owners manage memberships and member roles. Users update their own account name and password;
+        global administrators handle account resets and organization ownership.
+      </Typography.Paragraph>
 
       <section>
         {usersQuery.isError && <AccessFeedback error={usersQuery.error} onRetry={() => { void access.retry().then(() => usersQuery.refetch()); }} />}

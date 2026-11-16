@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClientProvider, QueryObserver, setLogger } from "react-query";
-import { MemoryRouter, Outlet, Route, Routes } from "react-router";
+import { createMemoryRouter, RouterProvider, Outlet, Route, Routes } from "react-router";
 import { api, ApiError, type OrganizationMembership, type OrganizationUser } from "../src/api";
 import { organizationCapabilities } from "../src/permissions/organizationCapabilities";
 import { reportOrganizationDenial, useOrganizationCapabilities } from "../src/hooks/useOrganizationCapabilities";
@@ -9,6 +9,8 @@ import { useAuthStore } from "../src/stores/authStore";
 import { privateQueryKey } from "../src/queryClient";
 import { RequireAdministrator, RequireOrganizationOwner, RequireProjectCreator } from "../src/components/AuthRouteGuards";
 import { AccessFeedback } from "../src/components/AccessFeedback";
+import { AccountAccess } from "../src/components/AccountAccess";
+import { describeOrganizationAccess } from "../src/permissions/accessDescriptions";
 
 const user = { username: "current", authorities: ["ROLE_USER"] };
 const admin = { username: "current", authorities: ["ROLE_ADMIN"] };
@@ -34,7 +36,7 @@ for (const [role, create, manage] of [
     expect(caps.canCreateProject).toBe(create);
     expect(caps.canDeleteProject).toBe(manage);
     expect(caps.canManageUsers).toBe(manage);
-    expect(caps.userRoles).toEqual(manage ? ["VIEWER"] : []);
+    expect(caps.userRoles).toEqual(manage ? ["VIEWER", "ANNOTATOR", "EDITOR"] : []);
     expect(caps.canRemoveUser(target)).toBe(manage);
     expect(caps.canRemoveUser({ ...target, membershipRole: "_4_OWNER" })).toBe(false);
     expect(caps.canRemoveUser({ ...target, username: user.username })).toBe(false);
@@ -58,13 +60,50 @@ function render(element: React.ReactNode, path = "/") {
   const initialSnapshot = { ...originalInitialState() };
   Object.assign(originalInitialState(), useAuthStore.getState());
   try {
-    return renderToStaticMarkup(<QueryClientProvider client={useAuthStore.getState().queryClient}><MemoryRouter initialEntries={[path]}>{element}</MemoryRouter></QueryClientProvider>);
+    const router = createMemoryRouter([{ path: "*", element }], { initialEntries: [path] });
+    try {
+      return renderToStaticMarkup(<QueryClientProvider client={useAuthStore.getState().queryClient}><RouterProvider router={router} /></QueryClientProvider>);
+    } finally { router.dispose(); }
   } finally { Object.assign(originalInitialState(), initialSnapshot); }
 }
 function seed(memberships: OrganizationMembership[]) {
   const state = useAuthStore.getState();
   state.queryClient.setQueryData(privateQueryKey(state.sessionId, "organizations", "my"), memberships);
 }
+
+test("Account shows each organization's role and permitted actions without administrator privileges", () => {
+  seed([membership("1_VIEWER", "A"), membership("_2_ANNOTATOR", "B"), membership("3_EDITOR", "C"), membership("4_OWNER", "D")]);
+  const html = render(<AccountAccess />);
+  for (const name of ["Organization A", "Organization B", "Organization C", "Organization D", "Viewer", "Annotator", "Editor", "Owner"]) expect(html).toContain(name);
+  expect(html).toContain("review annotation history");
+  expect(html).toContain("retry processing");
+  expect(html).toContain("Standard account");
+  expect(html).not.toContain("You can administer all organizations");
+});
+
+test("Account explains global administrator access even with no organization memberships", () => {
+  useAuthStore.setState({ user: admin });
+  seed([]);
+  const html = render(<AccountAccess />);
+  expect(html).toContain("Global administrator");
+  expect(html).toContain("You do not belong to any organizations");
+  expect(html).toContain("Your global administrator access still applies");
+});
+
+test("Account hides stale memberships and shows an error when access refresh fails", async () => {
+  seed([membership("4_OWNER")]);
+  const { queryClient, sessionId } = useAuthStore.getState();
+  await queryClient.fetchQuery(privateQueryKey(sessionId, "organizations", "my"), () => Promise.reject(new ApiError(500, "Offline")), { retry: false }).catch(() => {});
+  const html = render(<AccountAccess />);
+  expect(html).toContain("Could not load organization access");
+  expect(html).toContain("Retry");
+  expect(html).not.toContain("You do not belong to any organizations");
+  expect(html).not.toContain("Organization selected");
+});
+
+test("unknown membership roles do not claim privileges", () => {
+  expect(describeOrganizationAccess("5_UNKNOWN").label).toBe("Unknown role");
+});
 function Probe({ id = "selected" }: { id?: string }) {
   const access = useOrganizationCapabilities(id);
   return <output>{JSON.stringify({ state: access.state, create: access.canCreateProject, manage: access.canManageUsers, label: access.organization?.name })}</output>;

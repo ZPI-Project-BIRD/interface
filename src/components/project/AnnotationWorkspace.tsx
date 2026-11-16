@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, Button, InputNumber, Modal, Popconfirm, Select, Space, Tag, Typography } from "antd";
 import * as L from "leaflet";
 import { useMutation, useQueryClient } from "react-query";
-import { api, ApiError, type Detection, type FeatureDetections, type PolygonCoordinates, type Project, type SourceFeature } from "../../api";
+import { api, ApiError, type Detection, type FeatureDetections, type Project, type SourceFeature } from "../../api";
 import { useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
 import { privateQueryKey } from "../../queryClient";
 import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
 import { planarToLatLng } from "../../geo/projections";
-import { annotationCrs, projectVertex, replaceOutline, type AnnotationCrs } from "../../geo/annotationCoordinates";
+import { annotationCrs, projectVertex, replaceOutline } from "../../geo/annotationCoordinates";
+import { annotationDraftKey, type AnnotationDraft, type DraftUpdate } from "../../projects/annotationDrafts";
+import { AnnotationNavigationGuard } from "./AnnotationNavigationGuard";
 import { mergeAnnotation } from "../../projects/annotations";
 import { Map, type MapPolygon } from "../Map";
 import { AnnotationHistory } from "./AnnotationHistory";
 import { MutationFeedback } from "../MutationFeedback";
 
-interface Draft { id?: string; featureId: string; expectedVersion: number; bounds: PolygonCoordinates[]; crs: AnnotationCrs }
-type Change = { kind: "save"; draft: Draft } | { kind: "delete" | "verify"; featureId: string; detection: Detection };
+type Change = { kind: "save"; draft: AnnotationDraft } | { kind: "delete" | "verify"; featureId: string; detection: Detection };
 
 export function AnnotationWorkspace({ project, groups, features, selectedFeatureId }: {
   project: Project; groups?: FeatureDetections[]; features?: SourceFeature[]; selectedFeatureId: string | null;
@@ -23,8 +24,12 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   const access = useOrganizationCapabilities(organizationId);
   const sessionId = useAuthStore((state) => state.sessionId);
   const client = useQueryClient();
-  const [selection, setSelection] = useState<{ id: string; outline: number }>();
-  const [draft, setDraft] = useState<Draft>();
+  const draftKey = annotationDraftKey(project);
+  const draft = useAuthStore((state) => state.annotationDrafts[draftKey]);
+  const updateDraft = useAuthStore((state) => state.setAnnotationDraft);
+  const setDraft = useCallback((update: DraftUpdate) => updateDraft(sessionId, draftKey, update), [sessionId, draftKey, updateDraft]);
+  const [selection, setSelection] = useState<{ id: string; outline: number } | undefined>(() =>
+    draft ? { id: draft.id ?? "new", outline: 0 } : undefined);
   const [drawing, setDrawing] = useState(false);
   const [corner, setCorner] = useState(0);
   const [history, setHistory] = useState<"all" | "selected">();
@@ -65,19 +70,12 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
     onError: (error) => access.reportError(error),
   });
 
-  useEffect(() => {
-    if (!draft) return;
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [draft]);
-
   const choose = useCallback((id: string) => {
     const [detectionId, position] = id.split(":");
     const select = () => { setDraft(undefined); setDrawing(false); setSelection({ id: detectionId, outline: Number(position ?? 0) }); setCorner(0); change.reset(); };
     if (draft) modal.confirm({ title: "Discard unsaved outline changes?", onOk: select });
     else select();
-  }, [draft, modal, change]);
+  }, [draft, modal, change, setDraft]);
   const polygons = useMemo<MapPolygon[]>(() => records.flatMap(({ featureId, detection }) => {
     if (draft?.id === detection.id) return [];
     return detection.bounds?.map((rings, index) => ({ id: `${detection.id}:${index}`,
@@ -91,12 +89,12 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   const editableRings = useMemo(() => draft?.bounds[outlineIndex]?.map((ring) => ring.map(planarToLatLng).filter((point) => point !== null)), [draft, outlineIndex]);
   const updateRings = useCallback((rings: L.LatLng[][]) => {
     setDraft((value) => value && ({ ...value, bounds: replaceOutline(value.bounds, outlineIndex, rings, value.crs) }));
-  }, [outlineIndex]);
+  }, [outlineIndex, setDraft]);
   const finishDrawing = useCallback((ring: L.LatLng[]) => {
     setDraft((value) => value && ({ ...value, bounds: [...value.bounds, [ring.map((point) => projectVertex(point, value.crs))]] }));
     setSelection((value) => ({ id: value?.id ?? "new", outline: draft?.bounds.length ?? 0 }));
     setDrawing(false); setCorner(0);
-  }, [draft?.bounds.length]);
+  }, [draft?.bounds.length, setDraft]);
   const cancelDrawing = useCallback(() => setDrawing(false), []);
   const focus = useMemo(() => {
     const bounds = selected?.detection.bounds
@@ -133,6 +131,7 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   };
   return <div className="flex h-full min-h-[500px] flex-col">
     {modalContext}
+    <AnnotationNavigationGuard hasDraft={Boolean(draft)} pending={change.isLoading} onDiscard={discard} />
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#c9d0d5] bg-white px-4 py-3">
       <Typography.Text strong>Project results</Typography.Text>
       <Space wrap>
