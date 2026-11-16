@@ -54,8 +54,8 @@ export function PolandMiniMap({ project, width = 56, className }: PolandMiniMapP
     >
       <path
         d={path}
-        fill="#eef1f3"
-        stroke="#8a969e"
+        fill="var(--color-surface-muted)"
+        stroke="var(--color-subtle)"
         strokeWidth={1}
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
@@ -64,9 +64,9 @@ export function PolandMiniMap({ project, width = 56, className }: PolandMiniMapP
         cx={footprint.cx}
         cy={footprint.cy}
         r={HALO_RADIUS_KM}
-        fill="#d4380d"
+        fill="var(--color-brand)"
         fillOpacity={0.18}
-        stroke="#d4380d"
+        stroke="var(--color-brand-ink)"
         strokeOpacity={0.55}
         strokeWidth={1}
         vectorEffect="non-scaling-stroke"
@@ -76,8 +76,8 @@ export function PolandMiniMap({ project, width = 56, className }: PolandMiniMapP
         y={footprint.y}
         width={footprint.w}
         height={footprint.h}
-        fill="#d4380d"
-        stroke="#fff"
+        fill="var(--color-brand-ink)"
+        stroke="var(--color-surface)"
         strokeWidth={1}
         vectorEffect="non-scaling-stroke"
       />

@@ -4,11 +4,11 @@ import { describeOrganizationAccess } from "../permissions/accessDescriptions";
 
 export function AccountAccess() {
   const { query, memberships, administrator } = useOrganizations();
-  return <section className="mt-4 border border-[#c9d0d5] bg-white p-6" aria-labelledby="account-access-title">
+  return <section className="mt-4 app-card p-6" aria-labelledby="account-access-title">
     <Typography.Title id="account-access-title" level={3} className="!mt-0 !text-lg">Organizations and access</Typography.Title>
     <div className="mb-4">
       <Tag color={administrator ? "green" : "default"}>{administrator ? "Global administrator" : "Standard account"}</Tag>
-      <p className="mt-2 text-sm text-neutral-600">{administrator
+      <p className="mt-2 text-sm text-secondary">{administrator
         ? "You can administer all organizations and accounts, assign owners, and access all projects, including organizations where you have no membership."
         : "Your role in each organization determines which projects and actions you can access."}</p>
     </div>
@@ -22,7 +22,7 @@ export function AccountAccess() {
           const details = describeOrganizationAccess(role);
           return <li key={organization.id} className="py-3">
             <div className="flex flex-wrap items-center gap-2"><Typography.Text strong>{organization.name}</Typography.Text><Tag>{details.label}</Tag></div>
-            <p className="mb-0 mt-2 text-sm text-neutral-600">{details.description}</p>
+            <p className="mb-0 mt-2 text-sm text-secondary">{details.description}</p>
           </li>;
         })}
       </ul>}

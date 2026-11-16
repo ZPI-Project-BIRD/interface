@@ -24,7 +24,7 @@ export function ProjectStatus({ project }: { project: Pick<Project, "id" | "orga
     return progressQuery.isError ? (
       <Badge
         status="error"
-        text={<span className="text-xs text-neutral-500">Status unavailable</span>}
+        text={<span className="text-xs text-muted">Status unavailable</span>}
       />
     ) : (
       <Skeleton.Input active size="small" className="!h-4 !min-w-0 !w-28" />
@@ -37,7 +37,7 @@ export function ProjectStatus({ project }: { project: Pick<Project, "id" | "orga
     <Badge
       status={status.badge}
       text={
-        <span className="text-xs text-neutral-500">
+        <span className="text-xs text-muted">
           {status.label}
           {status.badge !== "success" && (
             <span className="tabular-nums"> · {overallPercent(progress)}%</span>

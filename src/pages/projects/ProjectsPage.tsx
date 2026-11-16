@@ -29,7 +29,7 @@ const projectColumns: TableColumnsType<Project> = [
     key: "name",
     render: (name: string, project) => (
       <div className="flex min-w-0 items-center gap-3">
-        <Avatar shape="square" size={28} className="shrink-0 !bg-[#123f5d] !text-xs">
+        <Avatar shape="square" size={28} className="shrink-0 !rounded-lg !bg-brand-soft !text-xs !text-brand-ink">
           {name.charAt(0).toLocaleUpperCase()}
         </Avatar>
         <div className="flex min-w-0 flex-col">
@@ -171,7 +171,8 @@ function ProjectsPage() {
         {!selectedOrganizationId && listQuery.isLoading && <Typography.Paragraph>Loading organizations…</Typography.Paragraph>}
         {canShowProjects && projectsQuery.isLoading && (
           <Table<ProjectGroup>
-            className="[&_.ant-table-thead>tr>th]:!bg-[#f6f8fa]"
+            className="app-table"
+            classNames={{ section: "app-table-frame" }}
             columns={organizationColumns}
             dataSource={[]}
             loading
@@ -184,7 +185,7 @@ function ProjectsPage() {
         {projectsQuery.isError && <AccessFeedback error={projectsQuery.error} onRetry={() => { void access.retry().then(() => projectsQuery.refetch()); }} />}
 
         {canShowProjects && projectsQuery.isSuccess && groups.length === 0 && (
-          <div className="border border-neutral-200 p-8">
+          <div className="app-card p-8">
             <Empty description={access.administrator ? "No organization memberships. Open a known organization from Administration." : "You do not have access to any organizations yet."}>
               {createButton}
             </Empty>
@@ -193,8 +194,8 @@ function ProjectsPage() {
 
         {canShowProjects && projectsQuery.isSuccess && groups.length > 0 && visibleGroups.length > 0 && (
           <Table<ProjectGroup>
-            bordered
-            className="[&_.ant-table-thead>tr>th]:!bg-[#f6f8fa]"
+            className="app-table"
+            classNames={{ section: "app-table-frame" }}
             columns={organizationColumns}
             dataSource={visibleGroups}
             expandable={{
@@ -203,8 +204,6 @@ function ProjectsPage() {
               expandedRowRender: (group) => (
                 <Table<Project>
                   showHeader={false}
-                  bordered
-                  className="rounded-none!"
                   columns={projectColumns}
                   dataSource={group.projects}
                   locale={{ emptyText: "No projects in this organization." }}

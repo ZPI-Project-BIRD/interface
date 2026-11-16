@@ -26,8 +26,8 @@ function formatArea(areaM2: number) {
 
 function Statistic({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-[#f6f8fa] px-3 py-2">
-      <div className="text-xs text-neutral-500">{label}</div>
+    <div className="rounded-lg bg-surface-muted px-3 py-2">
+      <div className="text-xs text-muted">{label}</div>
       <div className="text-base font-semibold tabular-nums">{value}</div>
     </div>
   );
@@ -45,17 +45,17 @@ export function DetectionList({
   const footprintAreaM2 = sheets?.reduce((sum, sheet) => sum + sheet.footprintAreaM2, 0) ?? 0;
 
   return (
-    <section className="border border-[#c9d0d5] bg-white">
+    <section className="app-card overflow-hidden">
       <button
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left hover:bg-[#f6f8fa]"
+        className="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left hover:bg-surface-muted"
       >
         <span className="font-medium">
           Detections
           {sheets && (
-            <span className="ml-2 text-sm font-normal text-neutral-500 tabular-nums">
+            <span className="ml-2 text-sm font-normal text-muted tabular-nums">
               {numberFormat.format(buildingCount)}
             </span>
           )}
@@ -64,7 +64,7 @@ export function DetectionList({
       </button>
 
       {expanded && (
-        <div className="flex flex-col gap-3 border-t border-[#e3e7ea] p-4">
+        <div className="flex flex-col gap-3 border-t border-app-border p-4">
           {isError && (
             <Alert
               type="error"
@@ -102,16 +102,16 @@ export function DetectionList({
                           onClick={() => onSelect(selected ? null : sheet.featureId)}
                           className={`flex w-full cursor-pointer items-center gap-3 border-l-2 px-3 py-2 text-left ${
                             selected
-                              ? "border-[#22d3ee] bg-[#ecfeff]"
-                              : "border-transparent hover:bg-[#f6f8fa]"
+                              ? "border-brand bg-brand-soft"
+                              : "border-transparent hover:bg-surface-muted"
                           }`}
                         >
-                          <AimOutlined className={selected ? "text-[#0891b2]" : "text-neutral-400"} />
+                          <AimOutlined className={selected ? "text-brand-ink" : "text-subtle"} />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium" title={sheet.featureId}>
                               {sheet.featureId}
                             </span>
-                            <span className="block text-xs text-neutral-500 tabular-nums">
+                            <span className="block text-xs text-muted tabular-nums">
                               {numberFormat.format(sheet.buildingCount)} buildings ·{" "}
                               {formatArea(sheet.footprintAreaM2)}
                             </span>

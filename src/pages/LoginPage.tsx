@@ -3,6 +3,7 @@ import LoginForm from "../components/LoginForm";
 import type { LoginCredentials } from "../api";
 import { useAuthStore } from "../stores/authStore";
 import logo from "../assets/logo.png";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 function LoginPage() {
   const [messageApi, contextHolder] = message.useMessage();
@@ -20,13 +21,14 @@ function LoginPage() {
   }
 
   return (
-    <Flex vertical justify="center" align="center" className="min-h-dvh">
+    <Flex vertical justify="center" align="center" className="relative min-h-dvh px-4 py-20">
+      <div className="absolute right-4 top-4 sm:right-6 sm:top-6"><ThemeToggle /></div>
       {contextHolder}
       {sessionExpired && (
         <Alert type="warning" showIcon title="Your session has expired. Please log in again." />
       )}
       <div className="max-w-md flex flex-row items-center justify-center space-x-3 mb-8">
-        <img src={logo} alt="Logo of BIRD" className="size-16 shrink-0" />
+        <img src={logo} alt="Logo of BIRD" className="brand-logo size-16 shrink-0" />
         <Typography.Title level={3} className="mb-0!">
           Building Irregularity Recognition and Detection
         </Typography.Title>

@@ -2,7 +2,8 @@ import "./App.css";
 import { useEffect } from "react";
 import { ConfigProvider, Flex, Spin } from "antd";
 import { Navigate, Route, Routes } from "react-router";
-import { theme } from "./theme";
+import { themes } from "./theme";
+import { useThemeStore } from "./stores/themeStore";
 import LoginPage from "./pages/LoginPage";
 import MapSelectionPage from "./pages/MapSelectionPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -22,6 +23,7 @@ import {
 } from "./components/AuthRouteGuards";
 
 function App() {
+  const mode = useThemeStore((state) => state.mode);
   const initializeAuth = useAuthStore((state) => state.initialize);
   const initialized = useAuthStore((state) => state.initialized);
 
@@ -30,7 +32,7 @@ function App() {
   }, [initializeAuth]);
 
   return (
-    <ConfigProvider theme={theme}>
+    <ConfigProvider theme={themes[mode]}>
       {!initialized ? (
         <Flex align="center" justify="center" className="min-h-dvh">
           <Spin size="large" />

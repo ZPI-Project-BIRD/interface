@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { CRS_2180 } from "../geo/projections";
+import { palette } from "../theme";
 
 const HIGH_RESOLUTION_ERROR_TILE_URL =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='100%25' height='100%25' fill='%23ef4444' fill-opacity='.35'/%3E%3C/svg%3E";
@@ -226,7 +227,7 @@ export function Map({
       [rectangle.north, rectangle.east],
     );
     const layer = L.rectangle(bounds, {
-      color: "#4ab72b",
+      color: palette.primary,
       fillOpacity: 0.15,
       interactive: false,
       weight: 2,
@@ -254,7 +255,7 @@ export function Map({
         const polygon = L.polygon(rings, {
           renderer,
           interactive: Boolean(onPolygonSelect),
-          color: highlighted ? "#22d3ee" : "#f59e0b",
+          color: highlighted ? palette.primary : "#f59e0b",
           fillOpacity: highlighted ? 0.45 : 0.25,
           weight: highlighted ? 2 : 1.5,
         });
@@ -273,14 +274,14 @@ export function Map({
     const map = mapRef.current;
     if (!map || !editableRings || !onRingsChange) return;
     const rings = editableRings.map((ring) => ring.map((point) => L.latLng(point.lat, point.lng)));
-    const outline = L.polygon(rings, { color: "#22d3ee", fillOpacity: 0.3, interactive: false }).addTo(map);
+    const outline = L.polygon(rings, { color: palette.primary, fillOpacity: 0.3, interactive: false }).addTo(map);
     const handles: L.Marker[] = [];
     rings.forEach((ring, ringIndex) => {
       // The final point repeats the first point; dragging the first updates both.
       ring.slice(0, -1).forEach((point, index) => {
         const handle = L.marker(point, { draggable: true, keyboard: true,
           title: `Outline ${ringIndex + 1}, corner ${index + 1}`,
-          icon: L.divIcon({ className: "annotation-vertex", html: '<span style="display:block;width:14px;height:14px;border:2px solid #123f5d;background:white;border-radius:50%"></span>', iconSize: [14, 14], iconAnchor: [7, 7] }),
+          icon: L.divIcon({ className: "annotation-vertex", html: `<span style="display:block;width:14px;height:14px;border:2px solid ${palette.primaryInk};background:${palette.surface};border-radius:50%"></span>`, iconSize: [14, 14], iconAnchor: [7, 7] }),
         }).addTo(map);
         handle.on("drag", () => {
           rings[ringIndex][index] = handle.getLatLng();
@@ -298,7 +299,7 @@ export function Map({
     const map = mapRef.current;
     if (!map || !drawingPolygon || !onPolygonDraw) return;
     const points: L.LatLng[] = [];
-    const drawing = L.polyline([], { color: "#22d3ee", interactive: false }).addTo(map);
+    const drawing = L.polyline([], { color: palette.primary, interactive: false }).addTo(map);
     const corners: L.CircleMarker[] = [];
     const cursor = map.getContainer().style.cursor;
     const doubleClickZoom = map.doubleClickZoom.enabled();
@@ -310,7 +311,7 @@ export function Map({
       if (previous && map.latLngToContainerPoint(previous).distanceTo(event.containerPoint) < 3) return;
       points.push(event.latlng);
       drawing.setLatLngs(points);
-      const corner = L.circleMarker(event.latlng, { radius: 5, color: "#123f5d", fillColor: "white", fillOpacity: 1, bubblingMouseEvents: false }).addTo(map);
+      const corner = L.circleMarker(event.latlng, { radius: 5, color: palette.primaryInk, fillColor: palette.surface, fillOpacity: 1, bubblingMouseEvents: false }).addTo(map);
       if (points.length === 1) corner.on("click", finish);
       corners.push(corner);
     };
@@ -386,7 +387,7 @@ export function Map({
         if (!startPoint) {
           setStart(event.latlng);
           draftLayer = L.rectangle(L.latLngBounds(event.latlng, event.latlng), {
-            color: "#4ab72b",
+            color: palette.primary,
             dashArray: "6 4",
             fillOpacity: 0.15,
             interactive: false,

@@ -32,7 +32,7 @@ export function AdminUsers() {
       for (const key of ["platform-users", "organization-users", "user-picker"]) void client.invalidateQueries(privateQueryKey(sessionId, key));
     },
   });
-  return <section className="border border-[#c9d0d5] bg-white p-5">
+  return <section className="app-card p-5">
     {modalContext}
     {messageContext}
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -41,8 +41,8 @@ export function AdminUsers() {
     </div>
     <MutationFeedback error={change.error} conflict="The last active global administrator cannot be banned. Refresh the account list and try again." />
     {users.isError ? <AccessFeedback error={users.error} onRetry={() => void users.refetch()} /> : <>
-      <Table<PlatformUser> rowKey="id" tableLayout="fixed" loading={users.isLoading} dataSource={users.data?.slice(0, PAGE_SIZE)} pagination={false} columns={[
-        { title: "Account", render: (_, user) => <div className="break-words"><Typography.Text strong>{user.friendlyName}</Typography.Text><div className="flex flex-wrap items-center gap-2 text-sm text-neutral-500"><span>@{user.username}</span>{user.isAdmin && <Tag>Global admin</Tag>}{user.username === username && <Tag>You</Tag>}</div>
+      <Table<PlatformUser> className="app-table" classNames={{ section: "app-table-frame" }} rowKey="id" tableLayout="fixed" loading={users.isLoading} dataSource={users.data?.slice(0, PAGE_SIZE)} pagination={false} columns={[
+        { title: "Account", render: (_, user) => <div className="break-words"><Typography.Text strong>{user.friendlyName}</Typography.Text><div className="flex flex-wrap items-center gap-2 text-sm text-muted"><span>@{user.username}</span>{user.isAdmin && <Tag>Global admin</Tag>}{user.username === username && <Tag>You</Tag>}</div>
           <div className="mt-2 min-[576px]:hidden"><Tag color={user.bannedAt ? "red" : "green"}>{user.bannedAt ? "Banned" : "Active"}</Tag>{user.banReason && <div className="mt-1 text-sm">{user.banReason}</div>}</div>
         </div> },
         { title: "Status", width: 130, responsive: ["sm"], render: (_, user) => <div className="break-words"><Tag color={user.bannedAt ? "red" : "green"}>{user.bannedAt ? "Banned" : "Active"}</Tag>{user.banReason && <div>{user.banReason}</div>}</div> },

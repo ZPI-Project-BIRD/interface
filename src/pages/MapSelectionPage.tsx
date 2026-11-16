@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Layout, message, Space } from "antd";
-import { Footer, Content, Header } from "antd/es/layout/layout";
+import { Button, message, Typography } from "antd";
 import { Map, type RectangleBounds } from "../components/Map";
 import { api } from "../api";
+import CrudPageLayout from "../components/ProjectsPageLayout";
 
 const EARTH_RADIUS_METERS = 6_371_008.8;
 const MAX_RECTANGLE_AREA_KM2 = 20;
@@ -55,24 +55,23 @@ const MapSelectionPage = () => {
   }, [messageApi]);
 
   return (
-    <Layout className="h-screen">
+    <CrudPageLayout fullBleed>
       {messageContextHolder}
-      <Header className="flex items-center">
-        <Space>
-          <Button disabled={!rectangle} onClick={() => setRectangle(null)}>
-            Clear rectangle
-          </Button>
-        </Space>
-      </Header>
-      <Content className="min-h-0 grow">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-app-border bg-surface px-4 py-3 sm:px-7">
+        <Typography.Text strong>Select an area</Typography.Text>
+        <Button disabled={!rectangle} onClick={() => setRectangle(null)}>
+          Clear rectangle
+        </Button>
+      </div>
+      <section className="min-h-0 flex-1">
         <Map mode="draw-rectangle" rectangle={rectangle} onRectangleDraw={handleRectangleDraw} />
-      </Content>
-      <Footer>
+      </section>
+      <footer className="border-t border-app-border bg-surface px-4 py-3 text-sm text-secondary sm:px-7">
         {rectangle
           ? `N ${rectangle.north.toFixed(6)}, E ${rectangle.east.toFixed(6)}, S ${rectangle.south.toFixed(6)}, W ${rectangle.west.toFixed(6)}`
           : "No rectangle selected"}
-      </Footer>
-    </Layout>
+      </footer>
+    </CrudPageLayout>
   );
 };
 

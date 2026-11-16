@@ -126,7 +126,7 @@ function CreateProjectPage() {
       {messageContextHolder}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(340px,420px)_1fr]">
-        <section className="z-10 flex flex-col border border-[#c9d0d5] bg-white p-6 lg:p-8">
+        <section className="z-10 flex flex-col app-card p-6 lg:p-8">
           <Typography.Title level={2} className="mb-2!">
             Create project
           </Typography.Title>
@@ -207,7 +207,7 @@ function CreateProjectPage() {
               <Input placeholder="Wrocław city centre" autoComplete="off" />
             </Form.Item>
 
-            <Flex vertical gap="small" className="mt-2 border border-[#d9dee2] bg-[#f5f7f7] p-3!">
+            <Flex vertical gap="small" className="mt-2 rounded-xl border border-app-border bg-surface-muted p-3!">
               <Typography.Text strong>Project area</Typography.Text>
               {rectangle ? (
                 <>
@@ -239,15 +239,15 @@ function CreateProjectPage() {
           </Form>
         </section>
 
-        <section className="relative min-h-140 overflow-hidden border border-[#c9d0d5] bg-neutral-200 lg:min-h-[680px]">
+        <section className="app-map-frame relative min-h-140 lg:min-h-[680px]">
           <Map
             mode={locked ? "browse" : "draw-rectangle"}
             rectangle={rectangle}
             onRectangleDraw={handleRectangleDraw}
             onDrawingChange={setIsDrawing}
           />
-          <div className="pointer-events-none absolute top-4 left-1/2 z-500 -translate-x-1/2 border border-[#aeb8bf] bg-white/95 px-4 py-2">
-            <Typography.Text className="whitespace-nowrap">
+          <div className="pointer-events-none absolute top-4 left-1/2 z-500 w-max max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-xl border border-app-border bg-surface/95 px-4 py-2 text-center">
+            <Typography.Text>
               {locked ? "Submitted area retained" : isDrawing
                 ? "Click to place the opposite corner · Esc to cancel"
                 : rectangle

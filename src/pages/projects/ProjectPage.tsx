@@ -38,7 +38,7 @@ function formatPoint(latitude: number, longitude: number) {
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex justify-between gap-3 py-1.5 text-sm">
-      <dt className="text-neutral-500">{label}</dt>
+      <dt className="text-muted">{label}</dt>
       <dd className="m-0 text-right tabular-nums">{children}</dd>
     </div>
   );
@@ -115,7 +115,7 @@ function ProjectPage() {
   if (projectQuery.isLoading || !organizationId || !projectId) {
     return (
       <CrudPageLayout headerAction={backButton}>
-        <Flex align="center" justify="center" className="min-h-[520px] border border-[#c9d0d5] bg-white">
+        <Flex align="center" justify="center" className="min-h-[520px] app-card">
           <Spin size="large" />
         </Flex>
       </CrudPageLayout>
@@ -141,9 +141,9 @@ function ProjectPage() {
     <CrudPageLayout headerAction={backButton} fullBleed>
       {messageContextHolder}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <aside className="flex shrink-0 flex-col gap-3 overflow-y-auto border-[#c9d0d5] bg-[#f4f5f6] p-4 max-lg:max-h-[50dvh] max-lg:border-b lg:w-96 lg:border-r">
+        <aside className="flex shrink-0 flex-col gap-3 overflow-y-auto border-app-border bg-page p-4 max-lg:max-h-[50dvh] max-lg:border-b lg:w-96 lg:border-r [&>*]:shrink-0">
           <header>
-            <Typography.Text className="!text-xs !font-semibold !tracking-[0.1em] !text-[#376f31] uppercase">
+            <Typography.Text className="!text-xs !font-semibold !tracking-[0.1em] !text-brand-ink uppercase">
               {organization.name}
             </Typography.Text>
             <Typography.Title level={2} className="!mt-1 !mb-0 !text-2xl">
@@ -160,8 +160,8 @@ function ProjectPage() {
           />
           <ProcessingRecovery organizationId={organizationId} projectId={projectId} progress={progressQuery.data} />
 
-          <section className="border border-[#c9d0d5] bg-white px-4 py-2">
-            <dl className="m-0 divide-y divide-[#e3e7ea]">
+          <section className="app-card px-4 py-2">
+            <dl className="m-0 divide-y divide-app-border">
               <InfoRow label="Area">{calculateAreaKm2(projectQuery.data).toFixed(2)} km²</InfoRow>
               <InfoRow label="North-west corner">
                 {formatPoint(topLeft.latitude, topLeft.longitude)}
@@ -191,7 +191,7 @@ function ProjectPage() {
           )}
         </aside>
 
-        <section className="min-h-[360px] flex-1 bg-neutral-200">
+        <section className="min-h-[360px] flex-1 bg-map-placeholder">
           <AnnotationWorkspace key={`${organizationId}:${projectId}`} project={projectQuery.data} groups={detectionsQuery.data}
             features={featuresQuery.data} selectedFeatureId={selectedFeatureId} />
         </section>

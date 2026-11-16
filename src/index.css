@@ -1,6 +1,130 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand: #4ab72b;
+  --color-brand-ink: #34801e;
+  --color-brand-soft: #f0f9ec;
+  --color-page: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f5f5;
+  --color-surface-hover: #f5faf2;
+  --color-app-border: #e8e8e8;
+  --color-ink: #252525;
+  --color-secondary: #595959;
+  --color-muted: #737373;
+  --color-subtle: #a3a3a3;
+  --color-map-placeholder: #e5e5e5;
+  --color-danger-border: #f1b9b0;
+  --color-danger-ink: #b42318;
+  --color-danger-soft: #fff5f3;
+  --font-sans: Arial, Helvetica, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  --color-brand-ink: #91dd76;
+  --color-brand-soft: #23351d;
+  --color-page: #141414;
+  --color-surface: #1f1f1f;
+  --color-surface-muted: #262626;
+  --color-surface-hover: #283522;
+  --color-app-border: #383838;
+  --color-ink: #f0f0f0;
+  --color-secondary: #c2c2c2;
+  --color-muted: #aaaaaa;
+  --color-subtle: #777777;
+  --color-map-placeholder: #202622;
+  --color-danger-border: #5c2c2c;
+  --color-danger-ink: #ffaaa5;
+  --color-danger-soft: #351f1f;
+}
+
+:root[data-theme="dark"] .brand-logo {
+  filter: invert(1);
+}
+
 html,
 body {
-  @apply bg-neutral-50;
+  @apply bg-page font-sans text-ink;
+}
+
+@layer components {
+  .app-card {
+    @apply rounded-2xl border border-app-border bg-surface;
+  }
+
+  .app-map-frame {
+    @apply overflow-hidden rounded-2xl border border-app-border bg-map-placeholder;
+  }
+
+}
+
+/* Round the table section once; keep pagination and its focus rings outside the clip. */
+.app-table.ant-table-wrapper .ant-table {
+  background: transparent;
+}
+
+.app-table .ant-table-container.app-table-frame {
+  overflow: hidden;
+  border: 1px solid var(--color-app-border);
+  border-radius: var(--radius-2xl);
+  background: var(--color-surface);
+  background-clip: padding-box;
+}
+
+.app-table .ant-table-tbody > tr:last-child > .ant-table-cell {
+  border-bottom: 0;
+}
+
+/* Leaflet controls sit outside Ant Design, so give them the same card and button treatment. */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: var(--color-map-placeholder);
+}
+
+.leaflet-container .leaflet-bar,
+.leaflet-container .leaflet-control-layers {
+  overflow: hidden;
+  border: 1px solid var(--color-app-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+
+.leaflet-container .leaflet-bar a {
+  color: var(--color-ink);
+  background: var(--color-surface);
+  border-bottom-color: var(--color-app-border);
+}
+
+.leaflet-container .leaflet-bar a.leaflet-disabled {
+  color: var(--color-subtle);
+  background: var(--color-surface-muted);
+}
+
+.leaflet-container .leaflet-control-layers {
+  color: var(--color-ink);
+}
+
+.leaflet-container .leaflet-bar a:hover {
+  color: var(--color-brand-ink);
+  background: var(--color-brand-soft);
+}
+
+.leaflet-container .leaflet-control-layers-selector {
+  accent-color: var(--color-brand);
+}
+
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--color-brand-ink);
+}
+
+.leaflet-container .leaflet-control-attribution {
+  color: var(--color-secondary);
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+}
+
+.leaflet-container .leaflet-popup-content-wrapper,
+.leaflet-container .leaflet-popup-tip {
+  color: var(--color-ink);
+  background: var(--color-surface);
 }

@@ -69,7 +69,7 @@ function AccountPage() {
       {messageContextHolder}
 
       {currentUserQuery.isLoading && (
-        <div className="flex min-h-105 items-center justify-center border border-[#c9d0d5] bg-white">
+        <div className="flex min-h-105 items-center justify-center app-card">
           <Spin size="large" />
         </div>
       )}
@@ -90,7 +90,7 @@ function AccountPage() {
 
       {currentUserQuery.isSuccess && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="border border-[#c9d0d5] bg-white p-6">
+          <section className="app-card p-6">
             <Typography.Title level={3} className="mb-1! text-lg!">
               Personal details
             </Typography.Title>
@@ -123,7 +123,7 @@ function AccountPage() {
             </Form>
           </section>
 
-          <section className="border border-[#c9d0d5] bg-white p-6">
+          <section className="app-card p-6">
             <Typography.Title level={3} className="mb-1! text-lg!">
               Change password
             </Typography.Title>

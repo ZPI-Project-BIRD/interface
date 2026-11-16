@@ -52,9 +52,9 @@ export function CreateAccountDialog({ onClose }: { onClose: () => void }) {
     mask={{ closable: !create.isLoading }} closable={!create.isLoading} keyboard={!create.isLoading} onCancel={onClose}>
     {created ? <>
       <Typography.Paragraph>Share these credentials with the user. The generated password is only shown here.</Typography.Paragraph>
-      <dl className="grid gap-3 border border-neutral-200 bg-neutral-50 p-4">
-        <div><dt className="text-sm text-neutral-500">Username</dt><dd className="m-0"><Typography.Text copyable>{created.user.username}</Typography.Text></dd></div>
-        <div><dt className="text-sm text-neutral-500">Temporary password</dt><dd className="m-0 break-all"><Typography.Text code copyable>{created.password}</Typography.Text></dd></div>
+      <dl className="grid gap-3 rounded-xl border border-app-border bg-page p-4">
+        <div><dt className="text-sm text-muted">Username</dt><dd className="m-0"><Typography.Text copyable>{created.user.username}</Typography.Text></dd></div>
+        <div><dt className="text-sm text-muted">Temporary password</dt><dd className="m-0 break-all"><Typography.Text code copyable>{created.password}</Typography.Text></dd></div>
       </dl>
       <Typography.Paragraph className="!mt-4" type="secondary">Assign this account to an organization from its Members &amp; owners page.</Typography.Paragraph>
       <div className="flex justify-end"><Button type="primary" onClick={onClose}>Done</Button></div>

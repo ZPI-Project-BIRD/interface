@@ -3,7 +3,7 @@ import { Typography } from "antd";
 
 function CrudPageHeader({ actions, title }: { actions: ReactNode; title: ReactNode }) {
   return (
-    <section className="mb-4 flex flex-col gap-4 border border-[#c9d0d5] bg-white p-5">
+    <section className="mb-4 flex flex-col gap-4 app-card p-5">
       <div className="min-w-0">
         <Typography.Title level={2} className="mb-1! text-2xl!">
           {title}

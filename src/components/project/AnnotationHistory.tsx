@@ -26,10 +26,10 @@ export function AnnotationHistory({ project, detectionId, onClose }: { project: 
       {history.isError ? <AccessFeedback error={history.error} onRetry={() => void history.refetch()} />
         : history.isLoading ? <p>Loading history…</p> : <>
           {history.data?.length === 0 && <Empty description="No annotation changes yet" />}
-          <ol className="m-0 list-none divide-y divide-[#c9d0d5] p-0">
+          <ol className="m-0 list-none divide-y divide-app-border p-0">
             {history.data?.slice(0, 25).map((entry) => <li key={entry.id} className="py-4">
               <Space wrap><Tag>{entry.action.toLowerCase()}</Tag><Typography.Text strong>{entry.actor}</Typography.Text></Space>
-              <p className="my-2 text-sm text-neutral-500">{new Date(entry.occurredAt).toLocaleString()}</p>
+              <p className="my-2 text-sm text-muted">{new Date(entry.occurredAt).toLocaleString()}</p>
               <p className="my-2 text-sm">{entry.before?.bounds?.length ?? 0} → {entry.after.deleted ? 0 : entry.after.bounds?.length ?? 0} outlines · Version {entry.after.version}</p>
               <Typography.Text type="secondary" copyable className="!text-xs">{entry.detectionId}</Typography.Text>
               <div className="mt-2"><Button size="small" onClick={() => setPreview(entry)}>Compare outlines</Button></div>

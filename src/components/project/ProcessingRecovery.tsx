@@ -38,7 +38,7 @@ export function ProcessingRecovery({ organizationId, projectId, progress }: { or
   const canRerun = jobs && jobs.finished + jobs.failed > 0 && jobs.pending === 0 && jobs.running === 0
     && discovery?.status !== "RUNNING" && discovery?.status !== "PENDING"
     && progress.featureDownloads.completed === progress.featureDownloads.total;
-  return <section className="border border-[#c9d0d5] bg-white p-4">
+  return <section className="app-card p-4">
     <Space wrap>
       <Popconfirm title="Run detection again?" okText="Run again" cancelText="Cancel" disabled={!canRerun || hasDraft || retry.isLoading}
         description={<span className="block max-w-64">Automatic detections will be regenerated. Saved annotations and history will remain.</span>}
@@ -51,8 +51,8 @@ export function ProcessingRecovery({ organizationId, projectId, progress }: { or
       {failed && <Button loading={retry.isLoading && retry.variables === "detections"} disabled={retry.isLoading}
         onClick={() => retry.mutate("detections")}>Retry failed analysis</Button>}
     </Space>
-    {hasDraft ? <p className="mb-0 text-sm text-neutral-500">Save or discard your annotation draft before running detection again.</p>
-      : !canRerun && <p className="mb-0 text-sm text-neutral-500">Available after source downloads and detection finish.</p>}
+    {hasDraft ? <p className="mb-0 text-sm text-muted">Save or discard your annotation draft before running detection again.</p>
+      : !canRerun && <p className="mb-0 text-sm text-muted">Available after source downloads and detection finish.</p>}
     {retry.isSuccess && retry.data && "requeuedJobs" in retry.data && <p className="mb-0 text-sm">{retry.data.requeuedJobs} job(s) queued for analysis.</p>}
     <MutationFeedback error={retry.error} conflict={retry.variables === "rerun"
       ? "Detection cannot be restarted in its current state. Refresh progress and try again."

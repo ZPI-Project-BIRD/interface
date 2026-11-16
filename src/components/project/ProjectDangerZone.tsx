@@ -12,19 +12,19 @@ export function ProjectDangerZone({ projectName, isDeleting, onDelete }: Project
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <section className="border border-[#f1b9b0] bg-white">
+    <section className="overflow-hidden rounded-2xl border border-danger-border bg-surface">
       <button
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left text-sm font-medium text-[#b42318] hover:bg-[#fff5f3]"
+        className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left text-sm font-medium text-danger-ink hover:bg-danger-soft"
       >
         Danger zone
         <DownOutlined className={`text-xs transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
 
       {expanded && (
-        <div className="flex items-center justify-between gap-3 border-t border-[#f1b9b0] px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-t border-danger-border px-4 py-3">
           <div className="min-w-0">
             <Typography.Text strong className="block text-sm">
               Delete this project

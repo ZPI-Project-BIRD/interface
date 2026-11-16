@@ -132,7 +132,7 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   return <div className="flex h-full min-h-[500px] flex-col">
     {modalContext}
     <AnnotationNavigationGuard hasDraft={Boolean(draft)} pending={change.isLoading} onDiscard={discard} />
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#c9d0d5] bg-white px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-app-border bg-surface px-4 py-3">
       <Typography.Text strong>Project results</Typography.Text>
       <Space wrap>
         {access.canReviewHistory && <Button onClick={() => setHistory("all")}>Annotation history</Button>}
@@ -150,9 +150,9 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
           editableRings={draft && access.canAnnotate && !drawing && !change.isLoading ? editableRings : undefined}
           onRingsChange={updateRings} drawingPolygon={drawing && access.canAnnotate && !change.isLoading}
           onPolygonDraw={finishDrawing} onPolygonDrawCancel={cancelDrawing} />
-        {drawing && <div className="absolute top-3 left-14 z-[500] max-w-sm bg-white p-3 shadow">Click each corner, then click the first corner or press Enter to finish. Escape cancels drawing.</div>}
+        {drawing && <div className="app-card absolute top-3 left-14 z-[500] max-w-sm p-3 shadow-sm">Click each corner, then click the first corner or press Enter to finish. Escape cancels drawing.</div>}
       </div>
-      <aside className="max-h-[45dvh] overflow-y-auto border-[#c9d0d5] bg-white p-4 max-xl:border-t xl:max-h-none xl:w-80 xl:border-l">
+      <aside className="max-h-[45dvh] overflow-y-auto border-app-border bg-surface p-4 max-xl:border-t xl:max-h-none xl:w-80 xl:border-l">
         <Typography.Title level={4} className="!mt-0">{draft ? "Edit outlines" : "Inspect a result"}</Typography.Title>
         {!draft && <Select className="w-full" showSearch optionFilterProp="label" placeholder="Click an outline or select a result"
           value={selected?.detection.id} onChange={(id) => choose(id)} options={records.map(({ detection, featureId }, index) => ({
@@ -196,7 +196,7 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
             <Popconfirm title="Discard unsaved changes?" onConfirm={discard}><Button disabled={change.isLoading}>Cancel editing</Button></Popconfirm>
           </Space>
         </>}
-        {!selected && !draft && <p className="text-sm text-neutral-500">Select a detected outline on the map to inspect its review status.</p>}
+        {!selected && !draft && <p className="text-sm text-muted">Select a detected outline on the map to inspect its review status.</p>}
         <MutationFeedback error={change.error} conflict="This result changed while you were editing. Your draft is kept. Discard it and reload before making another change." />
         {uncertain && <Alert className="my-3" type="warning" title="The request may have completed" description="Reload results and check the saved data before trying again." />}
         {(conflict || uncertain) && <Popconfirm title="Discard the draft and reload saved results?" onConfirm={loadLatest}><Button>Reload saved results</Button></Popconfirm>}

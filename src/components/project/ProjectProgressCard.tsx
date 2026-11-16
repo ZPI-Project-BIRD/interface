@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Alert, Badge, Progress, Skeleton, Typography } from "antd";
 import { DownOutlined } from "@ant-design/icons";
+import { palette } from "../../theme";
 import type { ProjectProgress, StageProgress } from "../../api";
 import { describeStatus, overallPercent } from "./progressStatus";
 
-const DOWNLOADED_COLOR = "#7cb3d9";
-const ANALYSED_COLOR = "#4a8b3a";
+const DOWNLOADED_COLOR = palette.primaryMuted;
+const ANALYSED_COLOR = palette.primary;
 
 interface ProjectProgressCardProps {
   progress?: ProjectProgress;
@@ -23,8 +24,8 @@ function StageRow({ label, stage, color }: { label: string; stage: StageProgress
   return (
     <div>
       <div className="flex items-baseline justify-between text-sm">
-        <span className="text-neutral-700">{label}</span>
-        <span className="tabular-nums text-neutral-500">
+        <span className="text-ink">{label}</span>
+        <span className="tabular-nums text-muted">
           {stage.completed} / {stage.total}
         </span>
       </div>
@@ -44,7 +45,7 @@ export function ProjectProgressCard({
 
   if (isLoading && !progress) {
     return (
-      <section className="border border-[#c9d0d5] bg-white p-4">
+      <section className="app-card p-4">
         <Skeleton active title={false} paragraph={{ rows: 2 }} />
       </section>
     );
@@ -61,7 +62,7 @@ export function ProjectProgressCard({
   const waitingForAnalysis = featureDownloads.completed - recognitionJobs.completed;
 
   return (
-    <section className="border border-[#c9d0d5] bg-white">
+    <section className="app-card overflow-hidden">
       {featureDownloads.total === 0 && <Alert
         type={progress.discovery?.status === "FAILED" ? "error" : "info"} showIcon title={status.label}
         description={progress.discovery?.status === "SUCCEEDED" ? "Discovery completed without finding source sheets in this area."
@@ -72,11 +73,11 @@ export function ProjectProgressCard({
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
-        className="block w-full cursor-pointer px-4 pt-3 pb-2 text-left hover:bg-[#f6f8fa]"
+        className="block w-full cursor-pointer px-4 pt-3 pb-2 text-left hover:bg-surface-muted"
       >
         <div className="flex items-center justify-between gap-3">
           <Badge status={status.badge} text={<span className="font-medium">{status.label}</span>} />
-          <span className="flex items-center gap-2 text-sm tabular-nums text-neutral-600">
+          <span className="flex items-center gap-2 text-sm tabular-nums text-secondary">
             {percent}%
             <DownOutlined
               className={`text-xs transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -94,7 +95,7 @@ export function ProjectProgressCard({
           size="small"
           className="!mb-0"
         />
-        <div className="flex gap-4 text-xs text-neutral-500">
+        <div className="flex gap-4 text-xs text-muted">
           <span className="flex items-center gap-1.5">
             <span className="inline-block size-2" style={{ background: ANALYSED_COLOR }} />
             Analysed
@@ -107,18 +108,18 @@ export function ProjectProgressCard({
       </button>
 
       {expanded && (
-        <div className="flex flex-col gap-2 border-t border-[#e3e7ea] px-4 py-3">
+        <div className="flex flex-col gap-2 border-t border-app-border px-4 py-3">
           <StageRow label="Sheets downloaded" stage={featureDownloads} color={DOWNLOADED_COLOR} />
           <StageRow label="Sheets analysed" stage={recognitionJobs} color={ANALYSED_COLOR} />
           {progress.discovery && <Typography.Text type="secondary">Discovery: {progress.discovery.status.toLowerCase()} · {progress.discovery.attempts} attempt(s)</Typography.Text>}
           {progress.jobStates && <Typography.Text>{progress.jobStates.pending} pending · {progress.jobStates.running} running · {progress.jobStates.failed} failed</Typography.Text>}
           <dl className="m-0 grid grid-cols-2 gap-2 text-sm">
             <div>
-              <dt className="text-xs text-neutral-500">Waiting for download</dt>
+              <dt className="text-xs text-muted">Waiting for download</dt>
               <dd className="m-0 tabular-nums">{waitingForDownload}</dd>
             </div>
             <div>
-              <dt className="text-xs text-neutral-500">Waiting for analysis</dt>
+              <dt className="text-xs text-muted">Waiting for analysis</dt>
               <dd className="m-0 tabular-nums">{waitingForAnalysis}</dd>
             </div>
           </dl>

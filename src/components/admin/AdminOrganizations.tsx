@@ -44,14 +44,14 @@ export function AdminOrganizations() {
     },
   });
   if (allQuery.isError) return <AccessFeedback error={allQuery.error} onRetry={() => void allQuery.refetch()} />;
-  return <section className="border border-[#c9d0d5] bg-white p-5">
+  return <section className="app-card p-5">
     {modalContext}
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <Input.Search className="w-full sm:max-w-80" placeholder="Search organizations" aria-label="Search organizations" allowClear onChange={(event) => setSearch(event.target.value)} />
       <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>Create organization</Button>
     </div>
     <MutationFeedback error={update.error} />
-    <Table<Organization> rowKey="id" tableLayout="fixed" loading={allQuery.isLoading} pagination={{ pageSize: 10, hideOnSinglePage: true }}
+    <Table<Organization> className="app-table" classNames={{ section: "app-table-frame" }} rowKey="id" tableLayout="fixed" loading={allQuery.isLoading} pagination={{ pageSize: 10, hideOnSinglePage: true }}
       dataSource={allQuery.data?.filter(({ name }) => name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))}
       columns={[
         { title: "Organization", dataIndex: "name", render: (name) => <Typography.Text strong className="break-words">{name}</Typography.Text> },
