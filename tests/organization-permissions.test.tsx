@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClientProvider, QueryObserver, setLogger } from "react-query";
 import { createMemoryRouter, RouterProvider, Outlet, Route, Routes } from "react-router";
-import { api, ApiError, type OrganizationMembership, type OrganizationUser } from "../src/api";
+import { api, ApiError, type OrganizationMembership, type OrganizationUser, type ProjectProgress } from "../src/api";
 import { organizationCapabilities } from "../src/permissions/organizationCapabilities";
 import { reportOrganizationDenial, useOrganizationCapabilities } from "../src/hooks/useOrganizationCapabilities";
 import { useAuthStore } from "../src/stores/authStore";
@@ -11,6 +11,7 @@ import { RequireAdministrator, RequireOrganizationOwner, RequireProjectCreator }
 import { AccessFeedback } from "../src/components/AccessFeedback";
 import { AccountAccess } from "../src/components/AccountAccess";
 import { describeOrganizationAccess } from "../src/permissions/accessDescriptions";
+import { ProcessingRecovery } from "../src/components/project/ProcessingRecovery";
 
 const user = { username: "current", authorities: ["ROLE_USER"] };
 const admin = { username: "current", authorities: ["ROLE_ADMIN"] };
@@ -250,6 +251,59 @@ mock.module("leaflet", () => ({}));
 mock.module("../src/geo/projections", () => ({ planarToLatLng: () => null, polygonAreaM2: () => 0 }));
 
 const project = { id: "known-project", organizationId: "selected", name: "Authorized project", topLeft: { latitude: 51, longitude: 17 }, bottomRight: { latitude: 50.99, longitude: 17.01 } };
+
+const completedProgress: ProjectProgress = {
+  featureDownloads: { completed: 1, total: 1 }, recognitionJobs: { completed: 1, total: 1 },
+  discovery: { status: "SUCCEEDED", attempts: 1, lastError: null, lockedUntil: null },
+  jobStates: { pending: 0, running: 0, finished: 1, failed: 0 },
+};
+function processingControls(progress = completedProgress) {
+  return render(<ProcessingRecovery organizationId="selected" projectId="known-project" progress={progress} />);
+}
+
+test("editors, owners and administrators can rerun completed detection", () => {
+  for (const role of ["3_EDITOR", "4_OWNER"]) {
+    seed([membership(role)]);
+    const html = processingControls();
+    expect(html).toContain("Run detection again");
+    expect(html).not.toContain("disabled=");
+  }
+  useAuthStore.setState({ user: admin });
+  seed([]);
+  expect(processingControls()).toContain("Run detection again");
+});
+
+test("viewers and annotators cannot rerun detection", () => {
+  for (const role of ["1_VIEWER", "2_ANNOTATOR"]) {
+    seed([membership(role)]);
+    expect(processingControls()).not.toContain("Run detection again");
+  }
+});
+
+test("rerun is disabled while jobs, discovery or source downloads are active", () => {
+  seed([membership("3_EDITOR")]);
+  for (const progress of [
+    { ...completedProgress, jobStates: { pending: 1, running: 0, finished: 1, failed: 0 } },
+    { ...completedProgress, jobStates: { pending: 0, running: 1, finished: 1, failed: 0 } },
+    { ...completedProgress, discovery: { ...completedProgress.discovery!, status: "RUNNING" as const } },
+    { ...completedProgress, featureDownloads: { completed: 1, total: 2 } },
+    { ...completedProgress, jobStates: { pending: 0, running: 0, finished: 0, failed: 0 } },
+  ]) {
+    const html = processingControls(progress);
+    expect(html).toContain("Run detection again");
+    expect(html).toContain("disabled=\"\"");
+    expect(html).toContain("Available after source downloads and detection finish.");
+  }
+});
+
+test("annotation drafts must be saved or discarded before detection can be rerun", () => {
+  seed([membership("3_EDITOR")]);
+  const state = useAuthStore.getState();
+  state.setAnnotationDraft(state.sessionId, "selected/known-project", { featureId: "sheet", expectedVersion: 0, bounds: [], crs: "EPSG:2180" });
+  const html = processingControls();
+  expect(html).toContain("disabled=\"\"");
+  expect(html).toContain("Save or discard your annotation draft before running detection again.");
+});
 
 test("authorized project page renders for administrator with empty memberships", async () => {
   useAuthStore.setState({ user: admin });
