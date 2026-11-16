@@ -27,9 +27,9 @@ export function AddExistingMemberModal({ organizationId, onClose, memberIds }: {
     },
     onError: (error) => access.reportError(error),
   });
-  return <Modal title="Assign existing account" open={access.canManageUsers} footer={null} onCancel={() => { if (!add.isLoading) onClose(); }}>
+  return <Modal title="Add existing account" open={access.canManageUsers} footer={null} onCancel={() => { if (!add.isLoading) onClose(); }}>
     <Form layout="vertical" initialValues={{ membershipRole: "VIEWER" }} disabled={add.isLoading} onFinish={(values) => add.mutate(values)}>
-      <Form.Item label={access.administrator ? "Account" : "Existing user's ID"} name="userId" rules={[
+      <Form.Item label={access.administrator ? "Account" : "Account ID"} name="userId" rules={[
         { required: true }, ...(!access.administrator ? [{ pattern: /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i, message: "Enter a valid user ID." }] : []),
       ]} extra={!access.administrator ? "Use the account ID supplied by the user or a global administrator." : undefined}>
         {access.administrator ? <UserPicker excludeIds={memberIds} disabled={add.isLoading} /> : <Input />}
@@ -38,7 +38,7 @@ export function AddExistingMemberModal({ organizationId, onClose, memberIds }: {
         <Select options={access.userRoles.map((value) => ({ value, label: value.charAt(0) + value.slice(1).toLowerCase() }))} />
       </Form.Item>
       <MutationFeedback error={add.error} conflict="This account is already a member. Refresh the member list to change its role." />
-      <Button type="primary" htmlType="submit" loading={add.isLoading}>Assign account</Button>
+      <Button type="primary" htmlType="submit" loading={add.isLoading}>Add member</Button>
     </Form>
   </Modal>;
 }

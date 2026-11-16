@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input, Modal, Select, message } from "antd";
+import { Button, Form, Input, Modal, Select, message } from "antd";
 import { useMutation, useQueryClient } from "react-query";
 import { api, type OrganizationUser, type OrganizationRole } from "../api";
 import { useOrganizationCapabilities } from "../hooks/useOrganizationCapabilities";
@@ -54,11 +54,9 @@ export function OrganizationUserEditor({ organizationId, user, onClose }: {
   );
   return <Modal title={`${allowed ? "Edit account" : "Change organization role"}: ${user.username}`} open={allowed || canChangeRole} onCancel={() => { if (!mutation.isLoading && !roleMutation.isLoading) onClose(); }} footer={null}>
     {messageContext}
-    {!allowed && <Alert className="mb-4" type="info" showIcon title="Organization membership"
-      description="Role changes apply only to this organization. Members update their own account name and password; contact a global administrator for account resets or ownership changes." />}
     {canChangeRole && <Form layout="vertical" initialValues={{ membershipRole: user.membershipRole.replace(/^_?\d+_/, "") }} disabled={roleMutation.isLoading}
       onFinish={({ membershipRole }) => roleMutation.mutate(membershipRole)}>
-      <Form.Item name="membershipRole" label="Organization role" rules={[{ required: true }]}>
+      <Form.Item name="membershipRole" label="Organization role" extra="Permissions apply only to this organization." rules={[{ required: true }]}>
         <Select options={access.userRoles.map((value) => ({ value, label: value.charAt(0) + value.slice(1).toLowerCase() }))} />
       </Form.Item>
       <MutationFeedback error={roleMutation.error} conflict="Assign another owner before demoting the last owner. Refresh the members to check their current roles." />

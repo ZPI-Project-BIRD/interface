@@ -12,6 +12,7 @@ import { AccessFeedback } from "../src/components/AccessFeedback";
 import { AccountAccess } from "../src/components/AccountAccess";
 import { describeOrganizationAccess } from "../src/permissions/accessDescriptions";
 import { ProcessingRecovery } from "../src/components/project/ProcessingRecovery";
+import OrganizationsPage from "../src/pages/organizations/OrganizationsPage";
 
 const user = { username: "current", authorities: ["ROLE_USER"] };
 const admin = { username: "current", authorities: ["ROLE_ADMIN"] };
@@ -71,6 +72,49 @@ function seed(memberships: OrganizationMembership[]) {
   const state = useAuthStore.getState();
   state.queryClient.setQueryData(privateQueryKey(state.sessionId, "organizations", "my"), memberships);
 }
+
+test("organization owners get member actions only for members they can manage", () => {
+  seed([membership("4_OWNER")]);
+  const { queryClient, sessionId } = useAuthStore.getState();
+  queryClient.setQueryData(privateQueryKey(sessionId, "organization-users", "selected"), [
+    target,
+    { ...target, id: "self", username: "current", friendlyName: "Current Owner", membershipRole: "_4_OWNER" },
+    { ...target, id: "owner", username: "anotherowner", friendlyName: "Other Owner", membershipRole: "_4_OWNER" },
+  ]);
+  const html = render(<Routes><Route path="/organizations/:organizationId" element={<OrganizationsPage />} /></Routes>, "/organizations/selected");
+  expect(html).toContain("Organization selected");
+  expect(html).toContain("Add member");
+  expect(html).toContain("Search members");
+  expect(html).toContain("Actions for @other");
+  expect(html).not.toContain("Actions for @current");
+  expect(html).not.toContain("Actions for @anotherowner");
+  expect(html).not.toContain("Open organization by ID");
+});
+
+test("unavailable organization metadata does not block an administrator's known organization", async () => {
+  useAuthStore.setState({ user: admin });
+  seed([]);
+  const { queryClient, sessionId } = useAuthStore.getState();
+  await queryClient.fetchQuery(privateQueryKey(sessionId, "organizations", "all"), () => Promise.reject(new ApiError(500, "Metadata failure")), { retry: false }).catch(() => {});
+  queryClient.setQueryData(privateQueryKey(sessionId, "organization-users", "selected"), [
+    { ...target, bannedAt: "2026-11-16T10:00:00Z" },
+  ]);
+  const html = render(<Routes><Route path="/organizations/:organizationId" element={<OrganizationsPage />} /></Routes>, "/organizations/selected");
+  expect(html).toContain("Organization members");
+  expect(html).toContain("Banned");
+  expect(html).toContain("Actions for @other");
+  expect(html).not.toContain("Access denied");
+});
+
+test("organization member page does not expose another organization's cached members", () => {
+  seed([membership("4_OWNER", "A"), membership("1_VIEWER", "B")]);
+  const { queryClient, sessionId } = useAuthStore.getState();
+  queryClient.setQueryData(privateQueryKey(sessionId, "organization-users", "B"), [target]);
+  const html = render(<Routes><Route path="/organizations/:organizationId" element={<OrganizationsPage />} /></Routes>, "/organizations/B");
+  expect(html).toContain("Access denied");
+  expect(html).not.toContain("Actions for @other");
+  expect(html).not.toContain("Add member");
+});
 
 test("Account shows each organization's role and permitted actions without administrator privileges", () => {
   seed([membership("1_VIEWER", "A"), membership("_2_ANNOTATOR", "B"), membership("3_EDITOR", "C"), membership("4_OWNER", "D")]);
