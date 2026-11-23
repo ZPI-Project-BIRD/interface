@@ -82,7 +82,6 @@ function ProjectPage() {
       mutationKey: privateQueryKey(sessionId, "delete-project", organizationId, projectId),
       onSuccess: () => {
         if (!isCurrentSession(sessionId)) return;
-        // Stop the polling queries before leaving so they do not refetch a deleted project.
         for (const key of ["project", "project-progress", "project-detections", "project-features", "annotation-history"]) {
           queryClient.removeQueries(privateQueryKey(sessionId, key, organizationId, projectId));
         }

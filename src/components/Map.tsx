@@ -61,8 +61,6 @@ function createSatelliteLayer() {
   return L.layerGroup([standardResolutionLayer, highResolutionLayer]);
 }
 
-// G2_MOBILE_500 is Geoportal's OSM-like base map. Its tile grid matches the map CRS
-// exactly, but it stops at zoom 15, so zoom 16 upscales those tiles.
 function createAdministrativeLayer() {
   return L.tileLayer(
     "https://mapy.geoportal.gov.pl/wss/service/WMTS/guest/wmts/G2_MOBILE_500" +
@@ -91,7 +89,6 @@ export type MapMode = "browse" | "draw-rectangle";
 
 export interface MapPolygon {
   id: string;
-  /** Outer ring first, then holes. */
   rings: L.LatLng[][];
   highlighted?: boolean;
   details?: MapPolygonDetails;
@@ -179,16 +176,21 @@ export function Map({
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rulerTool, setRulerTool] = useState<RulerTool>("off");
-  const rulerAvailable = measurable && mode === "browse" && !drawingPolygon && !onAreaSelect && !editableRings;
+  const rulerAvailable =
+    measurable && mode === "browse" && !drawingPolygon && !onAreaSelect && !editableRings;
   const activeRulerTool = rulerAvailable ? rulerTool : "off";
   const activeRulerToolRef = useRef(activeRulerTool);
   useEffect(() => {
     activeRulerToolRef.current = activeRulerTool;
   });
-  const planarOutlines = useMemo<PlanarOutline[]>(() => (measurable ? polygons ?? [] : []).flatMap(({ id, rings }) => {
-    const ring = rings[0]?.map(toPlanar) ?? [];
-    return ring.length >= 3 ? [{ id, ring, bounds: L.bounds(ring) }] : [];
-  }), [measurable, polygons]);
+  const planarOutlines = useMemo<PlanarOutline[]>(
+    () =>
+      (measurable ? (polygons ?? []) : []).flatMap(({ id, rings }) => {
+        const ring = rings[0]?.map(toPlanar) ?? [];
+        return ring.length >= 3 ? [{ id, ring, bounds: L.bounds(ring) }] : [];
+      }),
+    [measurable, polygons],
+  );
   const lastFocusRef = useRef<L.LatLngBounds | null>(null);
 
   useEffect(() => {
@@ -325,8 +327,16 @@ export function Map({
           interactive: Boolean(onPolygonSelect || details || measurable),
           color: highlighted ? palette.primary : "#f59e0b",
         });
-        if (onPolygonSelect) polygon.on("click", () => { if (activeRulerToolRef.current === "off") onPolygonSelect(id); });
-        if (details) polygon.bindTooltip(createDetailsTooltip(details), { sticky: true, direction: "top", offset: [0, -8] });
+        if (onPolygonSelect)
+          polygon.on("click", () => {
+            if (activeRulerToolRef.current === "off") onPolygonSelect(id);
+          });
+        if (details)
+          polygon.bindTooltip(createDetailsTooltip(details), {
+            sticky: true,
+            direction: "top",
+            offset: [0, -8],
+          });
         polygon.on("mouseover", () => {
           polygon.setStyle({ fillOpacity: style.fillOpacity + 0.15, weight: style.weight + 1 });
           setHoveredId(id);
@@ -349,14 +359,24 @@ export function Map({
     const map = mapRef.current;
     if (!map || !editableRings || !onRingsChange) return;
     const rings = editableRings.map((ring) => ring.map((point) => L.latLng(point.lat, point.lng)));
-    const outline = L.polygon(rings, { color: palette.primary, fillOpacity: 0.3, interactive: false }).addTo(map);
+    const outline = L.polygon(rings, {
+      color: palette.primary,
+      fillOpacity: 0.3,
+      interactive: false,
+    }).addTo(map);
     const handles: L.Marker[] = [];
     rings.forEach((ring, ringIndex) => {
-      // The final point repeats the first point; dragging the first updates both.
       ring.slice(0, -1).forEach((point, index) => {
-        const handle = L.marker(point, { draggable: true, keyboard: true,
+        const handle = L.marker(point, {
+          draggable: true,
+          keyboard: true,
           title: `Outline ${ringIndex + 1}, corner ${index + 1}`,
-          icon: L.divIcon({ className: "annotation-vertex", html: `<span style="display:block;width:14px;height:14px;border:2px solid ${palette.primaryInk};background:${palette.surface};border-radius:50%"></span>`, iconSize: [14, 14], iconAnchor: [7, 7] }),
+          icon: L.divIcon({
+            className: "annotation-vertex",
+            html: `<span style="display:block;width:14px;height:14px;border:2px solid ${palette.primaryInk};background:${palette.surface};border-radius:50%"></span>`,
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
+          }),
         }).addTo(map);
         handle.on("drag", () => {
           rings[ringIndex][index] = handle.getLatLng();
@@ -367,7 +387,10 @@ export function Map({
         handles.push(handle);
       });
     });
-    return () => { outline.remove(); handles.forEach((handle) => handle.remove()); };
+    return () => {
+      outline.remove();
+      handles.forEach((handle) => handle.remove());
+    };
   }, [editableRings, onRingsChange]);
 
   useEffect(() => {
@@ -380,27 +403,42 @@ export function Map({
     const doubleClickZoom = map.doubleClickZoom.enabled();
     map.getContainer().style.cursor = "crosshair";
     map.doubleClickZoom.disable();
-    const finish = () => { if (points.length >= 3) onPolygonDraw([...points, points[0]]); };
+    const finish = () => {
+      if (points.length >= 3) onPolygonDraw([...points, points[0]]);
+    };
     const click = (event: L.LeafletMouseEvent) => {
       const previous = points.at(-1);
-      if (previous && map.latLngToContainerPoint(previous).distanceTo(event.containerPoint) < 3) return;
+      if (previous && map.latLngToContainerPoint(previous).distanceTo(event.containerPoint) < 3)
+        return;
       points.push(event.latlng);
       drawing.setLatLngs(points);
-      const corner = L.circleMarker(event.latlng, { radius: 5, color: palette.primaryInk, fillColor: palette.surface, fillOpacity: 1, bubblingMouseEvents: false }).addTo(map);
+      const corner = L.circleMarker(event.latlng, {
+        radius: 5,
+        color: palette.primaryInk,
+        fillColor: palette.surface,
+        fillOpacity: 1,
+        bubblingMouseEvents: false,
+      }).addTo(map);
       if (points.length === 1) corner.on("click", finish);
       corners.push(corner);
     };
     const key = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement)?.closest("input,textarea,select")) return;
-      if (event.key === "Enter") { event.preventDefault(); finish(); }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finish();
+      }
       if (event.key === "Escape") onPolygonDrawCancel?.();
     };
     map.on("click", click);
     map.on("dblclick", finish);
     document.addEventListener("keydown", key);
     return () => {
-      map.off("click", click); map.off("dblclick", finish); document.removeEventListener("keydown", key);
-      drawing.remove(); corners.forEach((corner) => corner.remove());
+      map.off("click", click);
+      map.off("dblclick", finish);
+      document.removeEventListener("keydown", key);
+      drawing.remove();
+      corners.forEach((corner) => corner.remove());
       map.getContainer().style.cursor = cursor;
       if (doubleClickZoom) map.doubleClickZoom.enable();
     };
@@ -425,8 +463,13 @@ export function Map({
     container.style.cursor = "crosshair";
     map.dragging.disable();
     map.boxZoom.disable();
-    const boundsTo = (end: L.Point) => L.latLngBounds(map.containerPointToLatLng(start!), map.containerPointToLatLng(end));
-    const reset = () => { box?.remove(); box = null; start = null; };
+    const boundsTo = (end: L.Point) =>
+      L.latLngBounds(map.containerPointToLatLng(start!), map.containerPointToLatLng(end));
+    const reset = () => {
+      box?.remove();
+      box = null;
+      start = null;
+    };
     const down = (event: MouseEvent) => {
       if (event.button !== 0) return;
       start = map.mouseEventToContainerPoint(event);
@@ -436,7 +479,13 @@ export function Map({
       if (!start) return;
       const point = map.mouseEventToContainerPoint(event);
       if (!box && point.distanceTo(start) < 4) return;
-      box ??= L.rectangle(boundsTo(point), { color: palette.primary, dashArray: "6 4", fillOpacity: 0.1, interactive: false, weight: 2 }).addTo(map);
+      box ??= L.rectangle(boundsTo(point), {
+        color: palette.primary,
+        dashArray: "6 4",
+        fillOpacity: 0.1,
+        interactive: false,
+        weight: 2,
+      }).addTo(map);
       box.setBounds(boundsTo(point));
     };
     const up = (event: MouseEvent) => {
@@ -452,7 +501,9 @@ export function Map({
       suppressClick = false;
       event.stopPropagation();
     };
-    const key = (event: KeyboardEvent) => { if (event.key === "Escape") reset(); };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") reset();
+    };
     container.addEventListener("mousedown", down);
     container.addEventListener("click", click, true);
     document.addEventListener("mousemove", move);
@@ -480,7 +531,6 @@ export function Map({
     }
   }, [focusBounds]);
 
-  // Kept in refs so a new callback identity does not reset a selection in progress.
   const onRectangleDrawRef = useRef(onRectangleDraw);
   const onDrawingChangeRef = useRef(onDrawingChange);
 
@@ -497,8 +547,6 @@ export function Map({
         return;
       }
 
-      // Dragging pans the map; a click anchors the first corner and a second click the opposite
-      // one. Leaflet does not fire "click" after a drag, so panning never places a corner.
       const container = map.getContainer();
       const previousCursor = container.style.cursor;
       const wasDoubleClickZoomEnabled = map.doubleClickZoom.enabled();
@@ -506,7 +554,6 @@ export function Map({
       let draftLayer: L.Rectangle | null = null;
 
       container.style.cursor = "crosshair";
-      // Two quick clicks are a selection, not a zoom request.
       map.doubleClickZoom.disable();
 
       const setStart = (point: L.LatLng | null) => {
@@ -538,7 +585,6 @@ export function Map({
 
         const startContainerPoint = map.latLngToContainerPoint(startPoint);
 
-        // A second click on (almost) the same spot would make an empty rectangle; keep drawing.
         if (startContainerPoint.distanceTo(event.containerPoint) < 3) {
           return;
         }
@@ -597,14 +643,26 @@ export function Map({
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
-      {searchable && mapInstance && <div className="absolute top-2.5 left-13.5 z-600 w-[min(340px,calc(100%-116px))]">
-        <MapSearch map={mapInstance} bounds={POLAND_SEARCH_BOUNDS} />
-      </div>}
-      {(tools || measurable) && <div className="absolute top-[84px] left-[10px] z-[500] flex flex-col items-start gap-2">
-        {tools}
-        {measurable && mapInstance && <MapRuler map={mapInstance} outlines={planarOutlines} hoveredId={hoveredId}
-          tool={activeRulerTool} available={rulerAvailable} onToolChange={setRulerTool} />}
-      </div>}
+      {searchable && mapInstance && (
+        <div className="absolute top-2.5 left-13.5 z-600 w-[min(340px,calc(100%-116px))]">
+          <MapSearch map={mapInstance} bounds={POLAND_SEARCH_BOUNDS} />
+        </div>
+      )}
+      {(tools || measurable) && (
+        <div className="absolute top-[84px] left-[10px] z-[500] flex flex-col items-start gap-2">
+          {tools}
+          {measurable && mapInstance && (
+            <MapRuler
+              map={mapInstance}
+              outlines={planarOutlines}
+              hoveredId={hoveredId}
+              tool={activeRulerTool}
+              available={rulerAvailable}
+              onToolChange={setRulerTool}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -186,7 +186,6 @@ test("invalid credentials stay a login error rather than an expiry", async () =>
   expect(useAuthStore.getState().user).toBeNull();
   expect(useAuthStore.getState().sessionExpired).toBe(false);
   expect(useAuthStore.getState().loading).toBe(false);
-  // Keep the login form and its message holder mounted while a guest tries to log in.
   expect(useAuthStore.getState().queryClient).toBe(guest.queryClient);
   expect(useAuthStore.getState().sessionId).toBe(guest.sessionId);
 });

@@ -14,7 +14,6 @@ const csrf = { headerName: "X-XSRF-TOKEN", token: "configuration-test-token" };
 let frontend: ViteDevServer | undefined;
 let frontendOrigin: string;
 
-// Load the real config without depending on a developer's ignored env files.
 function configWithTarget(target?: string) {
   const previousDirectory = process.cwd();
   const previousTarget = process.env.API_PROXY_TARGET;
@@ -118,7 +117,6 @@ test("the real API client defaults a blank URL to /api and fetches CSRF before l
   process.env.VITE_API_URL = "   ";
   const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((input, options) => {
     credentialsModes.push(options?.credentials);
-    // Node/Bun has no document origin. Resolve browser-relative URLs for this test.
     const url = typeof input === "string" && input.startsWith("/")
       ? new URL(input, frontendOrigin)
       : input;

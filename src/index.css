@@ -58,7 +58,6 @@ body {
 
 }
 
-/* Round the table section once; keep pagination and its focus rings outside the clip. */
 .app-table.ant-table-wrapper .ant-table {
   background: transparent;
 }
@@ -75,7 +74,6 @@ body {
   border-bottom: 0;
 }
 
-/* Leaflet controls sit outside Ant Design, so give them the same card and button treatment. */
 .leaflet-container {
   font-family: var(--font-sans);
   background: var(--color-map-placeholder);

@@ -10,7 +10,6 @@ import { ThemeToggle } from "./ThemeToggle";
 interface CrudPageLayoutProps {
   children: ReactNode;
   headerAction?: ReactNode;
-  /** Fill the rest of the viewport edge to edge instead of using a padded, centered column. */
   fullBleed?: boolean;
 }
 

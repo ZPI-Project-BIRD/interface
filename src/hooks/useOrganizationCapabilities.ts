@@ -19,7 +19,6 @@ export function useOrganizations() {
     ({ signal }) => api.organizations.getMy({ signal }),
     { enabled: Boolean(user) && !loggingOut, staleTime: 60_000 },
   );
-  // Refetching or a failed background check must not leave stale privileges usable.
   const ready = query.isSuccess && !query.isFetching && !loggingOut;
   const memberships = ready ? query.data : [];
   return {
@@ -32,7 +31,6 @@ export function useOrganizations() {
 
 export function reportOrganizationDenial(client: QueryClient, sessionId: number, organizationId: string, error: unknown) {
   if (!isCurrentSession(sessionId) || !isPermissionDenied(error)) return;
-  // Latch denial until an explicit retry, even if a membership refresh still returns the old role.
   client.setQueryData(privateQueryKey(sessionId, "organization-denied", organizationId), true);
   void client.invalidateQueries(privateQueryKey(sessionId, "organizations"));
 }

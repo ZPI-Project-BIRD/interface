@@ -25,7 +25,6 @@ export interface CreationState {
 }
 export const creationKey = (sessionId: number) => privateQueryKey(sessionId, "project-creation");
 
-/** A matching project is a candidate, never proof that this request created it. */
 export function matchesSubmission(project: Project, submission: ProjectSubmission) {
   const close = (left: number, right: number) => Math.abs(left - right) < 1e-9;
   return project.organizationId === submission.organizationId && project.name.trim() === submission.name &&
@@ -35,7 +34,6 @@ export function matchesSubmission(project: Project, submission: ProjectSubmissio
     close(project.bottomRight.longitude, submission.payload.bottomRight.longitude);
 }
 
-/** Shared across page remounts in one session. The existing API provides no idempotency or discovery retry. */
 export class ProjectCreationFlow {
   private inFlight: Promise<Project | undefined> | undefined;
   private checkInFlight: Promise<void> | undefined;
@@ -56,7 +54,6 @@ export class ProjectCreationFlow {
     let postStarted = false;
     this.client.setQueryData<CreationState>(creationKey(this.sessionId), { submission, outcome: "pending", phase: "checking" });
     this.inFlight = withSession(this.sessionId, async () => {
-      // A failed preflight never sends POST. Existing IDs help distinguish later candidates from older identical projects.
       const existing = await api.projects.getAll(submission.organizationId, { signal: AbortSignal.timeout(15_000) });
       if (!isCurrentSession(this.sessionId)) return undefined;
       submission = { ...submission, baselineProjectIds: existing.map(({ id }) => id) };
@@ -81,7 +78,6 @@ export class ProjectCreationFlow {
     return this.inFlight;
   }
 
-  /** Read-only reconciliation. Never replays POST, and never guesses identity from matching fields. */
   checkExisting() {
     if (!isCurrentSession(this.sessionId)) return Promise.resolve();
     if (this.checkInFlight) return this.checkInFlight;
@@ -104,7 +100,6 @@ export class ProjectCreationFlow {
     return this.checkInFlight;
   }
 
-  /** Only a deliberate user acknowledgement unlocks a new logical submission after an ambiguous POST. */
   allowAnotherSubmission() {
     if (!isCurrentSession(this.sessionId)) return false;
     const state = this.state;

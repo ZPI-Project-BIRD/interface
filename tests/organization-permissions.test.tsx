@@ -56,7 +56,6 @@ test("administrator needs no membership and can remove another owner but never s
   expect(caps.canRemoveUser({ ...target, username: admin.username })).toBe(false);
 });
 
-// Use the session snapshot for server-rendered components in these tests.
 const originalInitialState = useAuthStore.getInitialState;
 function render(element: React.ReactNode, path = "/") {
   const initialSnapshot = { ...originalInitialState() };
@@ -279,7 +278,7 @@ test("a successful explicit retry clears a denial and uses the refreshed role", 
   const { queryClient, sessionId } = useAuthStore.getState();
   reportOrganizationDenial(queryClient, sessionId, "selected", new ApiError(403, "Forbidden"));
   let retry!: () => Promise<void>;
-  // eslint-disable-next-line react-hooks/globals -- Capture a callback from a one-off server render for this test.
+  // eslint-disable-next-line react-hooks/globals
   function Recovery() { retry = useOrganizationCapabilities("selected").retry; return null; }
   render(<Recovery />);
   const request = spyOn(api.organizations, "getMy").mockResolvedValue([membership("1_VIEWER")]);
@@ -289,7 +288,6 @@ test("a successful explicit retry clears a denial and uses the refreshed role", 
   } finally { request.mockRestore(); }
 });
 
-// Map rendering is unrelated to access. Keep these page regressions independent of browser-only Leaflet.
 mock.module("../src/components/Map", () => ({ Map: () => <div>Project map</div> }));
 mock.module("leaflet", () => ({}));
 mock.module("../src/geo/projections", () => ({ planarToLatLng: () => null, polygonAreaM2: () => 0 }));

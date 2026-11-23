@@ -105,7 +105,6 @@ function createTheme(mode: ColorMode): ThemeConfig {
         cellPaddingBlockMD: 10,
         cellPaddingInlineMD: 14,
         headerBg: colors.surfaceMuted,
-        // The table section owns the corners, including tables without a header.
         headerBorderRadius: 0,
         headerColor: colors.secondary,
         rowExpandedBg: colors.page,

@@ -23,7 +23,6 @@ export function describeStatus({ featureDownloads, recognitionJobs, discovery, j
   return { label: "Analysing sheets", badge: "processing" };
 }
 
-/** Combined completion of both stages, 0–100. */
 export function overallPercent({ featureDownloads, recognitionJobs }: ProjectProgress) {
   return featureDownloads.total === 0
     ? 0

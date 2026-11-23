@@ -3,12 +3,19 @@ import { create } from "zustand";
 export type ColorMode = "light" | "dark";
 export const THEME_STORAGE_KEY = "bird-color-mode";
 
-export function preferredColorMode(): ColorMode {
-  if (typeof window === "undefined") return "light";
+function readSavedColorMode(): ColorMode | null {
   try {
     const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (saved === "light" || saved === "dark") return saved;
-  } catch { /* Keep the toggle usable when browser storage is unavailable. */ }
+    return saved === "light" || saved === "dark" ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+export function preferredColorMode(): ColorMode {
+  if (typeof window === "undefined") return "light";
+  const saved = readSavedColorMode();
+  if (saved) return saved;
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -27,7 +34,7 @@ export const useThemeStore = create<{
     const mode = useThemeStore.getState().mode === "dark" ? "light" : "dark";
     useThemeStore.setState({ mode });
     applyColorMode(mode);
-    try { window.localStorage.setItem(THEME_STORAGE_KEY, mode); } catch { /* Session-only preference. */ }
+    try { window.localStorage.setItem(THEME_STORAGE_KEY, mode); } catch { return; }
   },
 }));
 

@@ -14,7 +14,6 @@ export function organizationCapabilities(
   membership?: OrganizationMembership,
 ) {
   const administrator = isAdministrator(user);
-  // jOOQ membership roles may be serialized as 4_OWNER or _4_OWNER.
   const role = membership?.role.replace(/^_?\d+_/, "");
   const canManage = administrator || Boolean(user && role === "OWNER");
   return {

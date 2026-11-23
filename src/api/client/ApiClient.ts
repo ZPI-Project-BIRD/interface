@@ -119,7 +119,6 @@ export class ApiClient {
 
     signal.throwIfAborted();
     const responseBody = await this.readResponseBody(response);
-    // Some transports finish despite cancellation. Never accept an old session's body/401.
     signal.throwIfAborted();
 
     if (!response.ok) {

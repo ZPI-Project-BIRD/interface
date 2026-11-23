@@ -30,7 +30,6 @@ export function AdminOrganizations() {
       client.setQueryData<Organization[]>(privateQueryKey(sessionId, "organizations", "all"), (current) =>
         name === undefined ? current?.filter(({ id }) => id !== organization.id) ?? []
           : current?.map((item) => item.id === organization.id ? { ...item, name: name.trim() } : item) ?? []);
-      // Refresh names, permissions and project groups anywhere they are currently displayed.
       void client.invalidateQueries(privateQueryKey(sessionId, "organizations"));
       void client.invalidateQueries(privateQueryKey(sessionId, "projects"));
       if (name === undefined) {

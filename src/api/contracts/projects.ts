@@ -53,16 +53,11 @@ export interface SourceFeature {
   fileSize: number | null;
 }
 
-/**
- * Polygon rings of `[easting, northing]` pairs in meters, outer ring first. Coordinates are in
- * the source raster's CRS: PL-2000 (EPSG:2176–2179) for current orthophotos, or EPSG:2180.
- */
 export type PolygonCoordinates = [number, number][][];
 
 export interface Detection {
   id: string;
   recognitionJobId: string | null;
-  /** One detection batch can contain many building polygons. */
   bounds: PolygonCoordinates[] | null;
   version: number;
   source: "MODEL" | "MANUAL";

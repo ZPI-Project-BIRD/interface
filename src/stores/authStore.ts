@@ -101,7 +101,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     logout: async () => {
-      if (get().loading) return; // hide private pages and stop work before login request
+      if (get().loading) return;
       replaceSession(get().user, true);
       const attempt = get().sessionId;
       try {
@@ -113,7 +113,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
           replaceSession(null);
           return;
         }
-        // keep identity but hide private pages and stop work before login request
         set({ loading: false, loggingOut: false, error: getErrorMessage(error, "Unable to log out.") });
         throw error;
       }

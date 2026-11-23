@@ -14,7 +14,6 @@ function updateProjectLists(client: QueryClient, sessionId: number, organization
     ?? allOrganizations.find(({ id }) => id === organizationId)
     ?? previousKnown.find(({ id }) => id === organizationId) ?? { id: organizationId, name: organizationId };
   const prefix = privateQueryKey(sessionId, "projects");
-  // An older list response must not overwrite the newly saved project or the explicit reconciliation result.
   void client.cancelQueries({ queryKey: prefix }, { silent: true, revert: false });
   client.setQueryData<Organization[]>(privateQueryKey(sessionId, "known-project-organizations"),
     [...previousKnown.filter(({ id }) => id !== organizationId), organization]);

@@ -9,7 +9,6 @@ const REFRESH_SECONDS = 10;
 
 export function ProjectStatus({ project }: { project: Pick<Project, "id" | "organizationId"> }) {
   const sessionId = useAuthStore((state) => state.sessionId);
-  // Same key as the project page, so both views share one cached progress entry.
   const progressQuery = useQuery(
     privateQueryKey(sessionId, "project-progress", project.organizationId, project.id),
     ({ signal }) => api.projects.getProgress(project.organizationId, project.id, { signal }),
