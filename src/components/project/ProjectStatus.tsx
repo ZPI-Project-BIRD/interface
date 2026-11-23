@@ -42,6 +42,9 @@ export function ProjectStatus({ project }: { project: Pick<Project, "id" | "orga
           {status.badge !== "success" && (
             <span className="tabular-nums"> · {overallPercent(progress)}%</span>
           )}
+          {progress.queue?.nextPosition != null && (
+            <span className="tabular-nums font-medium text-brand-ink"> · #{progress.queue.nextPosition} in queue</span>
+          )}
         </span>
       }
     />

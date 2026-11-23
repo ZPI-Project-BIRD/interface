@@ -27,6 +27,14 @@ export interface ProjectProgress {
   recognitionJobs: StageProgress;
   discovery?: DiscoveryStatus;
   jobStates?: { pending: number; running: number; finished: number; failed: number };
+  queue?: QueuePosition;
+}
+
+export interface QueuePosition {
+  nextPosition: number | null;
+  lastPosition: number | null;
+  queued: number;
+  total: number;
 }
 
 export interface DiscoveryStatus {

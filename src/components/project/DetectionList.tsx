@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Alert, Empty, Skeleton } from "antd";
 import { AimOutlined, DownOutlined } from "@ant-design/icons";
+import { formatArea } from "../../geo/area";
 
 export interface SheetDetections {
   featureId: string;
@@ -8,20 +9,14 @@ export interface SheetDetections {
   footprintAreaM2: number;
 }
 
+const numberFormat = new Intl.NumberFormat();
+
 interface DetectionListProps {
   sheets?: SheetDetections[];
   isLoading: boolean;
   isError: boolean;
   selectedFeatureId: string | null;
   onSelect: (featureId: string | null) => void;
-}
-
-const numberFormat = new Intl.NumberFormat();
-
-function formatArea(areaM2: number) {
-  return areaM2 >= 10_000
-    ? `${(areaM2 / 10_000).toFixed(2)} ha`
-    : `${numberFormat.format(Math.round(areaM2))} m²`;
 }
 
 function Statistic({ label, value }: { label: string; value: string }) {

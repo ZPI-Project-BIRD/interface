@@ -128,3 +128,61 @@ body {
   color: var(--color-ink);
   background: var(--color-surface);
 }
+
+.leaflet-container .ruler-label {
+  padding: 1px 6px;
+  border: 1px solid #0ea5e9;
+  border-radius: 6px;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none;
+}
+
+.leaflet-container .ruler-label::before {
+  display: none;
+}
+
+.leaflet-container .ruler-vertex {
+  border: 2px solid #0ea5e9;
+  border-radius: 50%;
+  background: var(--color-surface);
+}
+
+.map-tool-button {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-app-border);
+  border-radius: 12px;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.map-tool-button:hover:not(:disabled) {
+  color: var(--color-brand-ink);
+  background: var(--color-brand-soft);
+}
+
+.map-tool-button-active {
+  border-color: var(--color-brand);
+  color: var(--color-brand-ink);
+  background: var(--color-brand-soft);
+}
+
+.map-tool-button:disabled {
+  color: var(--color-subtle);
+  background: var(--color-surface-muted);
+  cursor: not-allowed;
+}
+
+.map-tool-button:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
