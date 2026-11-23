@@ -246,7 +246,7 @@ function CreateProjectPage() {
             onRectangleDraw={handleRectangleDraw}
             onDrawingChange={setIsDrawing}
           />
-          <div className="pointer-events-none absolute top-4 left-1/2 z-500 w-max max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-xl border border-app-border bg-surface/95 px-4 py-2 text-center">
+          <div className="pointer-events-none absolute top-14 left-1/2 z-500 w-max max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-xl border border-app-border bg-surface/95 px-4 py-2 text-center">
             <Typography.Text>
               {locked ? "Submitted area retained" : isDrawing
                 ? "Click to place the opposite corner · Esc to cancel"
