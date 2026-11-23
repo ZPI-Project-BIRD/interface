@@ -8,6 +8,7 @@ import { useOrganizationCapabilities } from "../../hooks/useOrganizationCapabili
 import { AccessFeedback } from "../AccessFeedback";
 import { Map, type MapPolygon } from "../Map";
 import { planarToLatLng } from "../../geo/projections";
+import { outlineGeometryRows } from "../../geo/area";
 
 export function AnnotationHistory({ project, detectionId, onClose }: { project: Project; detectionId?: string; onClose: () => void }) {
   const access = useOrganizationCapabilities(project.organizationId);
@@ -18,8 +19,9 @@ export function AnnotationHistory({ project, detectionId, onClose }: { project: 
     ({ signal }) => api.projects.getAnnotationHistory(project.organizationId, project.id, { detectionId, limit: 26, offset: page * 25 }, { signal }),
     { enabled: access.canReviewHistory, onError: access.reportError });
   const previewPolygons: MapPolygon[] = preview ? [preview.before, preview.after].flatMap((state, stage) =>
-    state?.bounds?.map((rings, index) => ({ id: `${stage}:${index}`, highlighted: stage === 1,
+    state?.bounds?.map((rings, index, outlines) => ({ id: `${stage}:${index}`, highlighted: stage === 1,
       rings: rings.map((ring) => ring.map(planarToLatLng).filter((point) => point !== null)),
+      details: { title: `${stage === 1 ? "Saved" : "Previous"} outline ${index + 1} of ${outlines.length}`, rows: outlineGeometryRows(rings) },
     })) ?? []) : [];
   return <>
     <Drawer title={detectionId ? "Result review history" : "Project annotation history"} open={access.canReviewHistory} onClose={onClose} size={520}>

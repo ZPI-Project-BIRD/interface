@@ -31,6 +31,7 @@ export type {
   PolygonCoordinates,
   Project,
   ProjectProgress,
+  QueuePosition,
   StageProgress,
   DiscoveryStatus,
   DetectionState,

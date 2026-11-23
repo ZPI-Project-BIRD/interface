@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { CRS_2180 } from "../geo/projections";
 import { palette } from "../theme";
+import { toPlanar, type PlanarOutline } from "../geo/measure";
+import { MapRuler, type RulerTool } from "./MapRuler";
 
 const HIGH_RESOLUTION_ERROR_TILE_URL =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='100%25' height='100%25' fill='%23ef4444' fill-opacity='.35'/%3E%3C/svg%3E";
@@ -84,6 +86,36 @@ export interface MapPolygon {
   /** Outer ring first, then holes. */
   rings: L.LatLng[][];
   highlighted?: boolean;
+  details?: MapPolygonDetails;
+}
+
+export interface MapPolygonDetails {
+  title: string;
+  rows: { label: string; value: string }[];
+}
+
+function createDetailsTooltip({ title, rows }: MapPolygonDetails) {
+  const content = document.createElement("div");
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  heading.style.display = "block";
+  heading.style.marginBottom = "2px";
+  content.append(heading);
+  for (const { label, value } of rows) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.gap = "12px";
+    const labelElement = document.createElement("span");
+    labelElement.textContent = label;
+    labelElement.style.opacity = "0.7";
+    const valueElement = document.createElement("span");
+    valueElement.textContent = value;
+    valueElement.style.fontVariantNumeric = "tabular-nums";
+    row.append(labelElement, valueElement);
+    content.append(row);
+  }
+  return content;
 }
 
 export interface RectangleBounds {
@@ -108,6 +140,9 @@ interface MapProps {
   drawingPolygon?: boolean;
   onPolygonDraw?: (ring: L.LatLng[]) => void;
   onPolygonDrawCancel?: () => void;
+  onAreaSelect?: (bounds: L.LatLngBounds) => void;
+  measurable?: boolean;
+  tools?: ReactNode;
 }
 
 export function Map({
@@ -125,9 +160,25 @@ export function Map({
   drawingPolygon = false,
   onPolygonDraw,
   onPolygonDrawCancel,
+  onAreaSelect,
+  measurable = false,
+  tools,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [rulerTool, setRulerTool] = useState<RulerTool>("off");
+  const rulerAvailable = measurable && mode === "browse" && !drawingPolygon && !onAreaSelect && !editableRings;
+  const activeRulerTool = rulerAvailable ? rulerTool : "off";
+  const activeRulerToolRef = useRef(activeRulerTool);
+  useEffect(() => {
+    activeRulerToolRef.current = activeRulerTool;
+  });
+  const planarOutlines = useMemo<PlanarOutline[]>(() => (measurable ? polygons ?? [] : []).flatMap(({ id, rings }) => {
+    const ring = rings[0]?.map(toPlanar) ?? [];
+    return ring.length >= 3 ? [{ id, ring, bounds: L.bounds(ring) }] : [];
+  }), [measurable, polygons]);
   const lastFocusRef = useRef<L.LatLngBounds | null>(null);
 
   useEffect(() => {
@@ -152,6 +203,7 @@ export function Map({
       zoomControl: interactive,
     }).setView(PWR_B4_CENTER, INITIAL_ZOOM);
     mapRef.current = map;
+    setMapInstance(map);
 
     let isMounted = true;
 
@@ -211,6 +263,7 @@ export function Map({
       resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
+      setMapInstance(null);
       lastFocusRef.current = null;
     };
   }, [interactive, layer, mode]);
@@ -251,15 +304,27 @@ export function Map({
 
     const renderer = L.canvas({ padding: 0.5 });
     const layer = L.layerGroup(
-      polygons.map(({ id, rings, highlighted }) => {
-        const polygon = L.polygon(rings, {
-          renderer,
-          interactive: Boolean(onPolygonSelect),
-          color: highlighted ? palette.primary : "#f59e0b",
+      polygons.map(({ id, rings, highlighted, details }) => {
+        const style = {
           fillOpacity: highlighted ? 0.45 : 0.25,
           weight: highlighted ? 2 : 1.5,
+        };
+        const polygon = L.polygon(rings, {
+          ...style,
+          renderer,
+          interactive: Boolean(onPolygonSelect || details || measurable),
+          color: highlighted ? palette.primary : "#f59e0b",
         });
-        if (onPolygonSelect) polygon.on("click", () => onPolygonSelect(id));
+        if (onPolygonSelect) polygon.on("click", () => { if (activeRulerToolRef.current === "off") onPolygonSelect(id); });
+        if (details) polygon.bindTooltip(createDetailsTooltip(details), { sticky: true, direction: "top", offset: [0, -8] });
+        polygon.on("mouseover", () => {
+          polygon.setStyle({ fillOpacity: style.fillOpacity + 0.15, weight: style.weight + 1 });
+          setHoveredId(id);
+        });
+        polygon.on("mouseout", () => {
+          polygon.setStyle(style);
+          setHoveredId((current) => (current === id ? null : current));
+        });
         return polygon;
       }),
     ).addTo(map);
@@ -268,7 +333,7 @@ export function Map({
       layer.remove();
       renderer.remove();
     };
-  }, [polygons, onPolygonSelect]);
+  }, [polygons, onPolygonSelect, measurable]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -330,6 +395,71 @@ export function Map({
       if (doubleClickZoom) map.doubleClickZoom.enable();
     };
   }, [drawingPolygon, onPolygonDraw, onPolygonDrawCancel]);
+
+  const onAreaSelectRef = useRef(onAreaSelect);
+  useEffect(() => {
+    onAreaSelectRef.current = onAreaSelect;
+  });
+  const selectingArea = Boolean(onAreaSelect);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectingArea) return;
+    const container = map.getContainer();
+    const previousCursor = container.style.cursor;
+    const wasDragging = map.dragging.enabled();
+    const wasBoxZoom = map.boxZoom.enabled();
+    let start: L.Point | null = null;
+    let box: L.Rectangle | null = null;
+    let suppressClick = false;
+    container.style.cursor = "crosshair";
+    map.dragging.disable();
+    map.boxZoom.disable();
+    const boundsTo = (end: L.Point) => L.latLngBounds(map.containerPointToLatLng(start!), map.containerPointToLatLng(end));
+    const reset = () => { box?.remove(); box = null; start = null; };
+    const down = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      start = map.mouseEventToContainerPoint(event);
+      suppressClick = false;
+    };
+    const move = (event: MouseEvent) => {
+      if (!start) return;
+      const point = map.mouseEventToContainerPoint(event);
+      if (!box && point.distanceTo(start) < 4) return;
+      box ??= L.rectangle(boundsTo(point), { color: palette.primary, dashArray: "6 4", fillOpacity: 0.1, interactive: false, weight: 2 }).addTo(map);
+      box.setBounds(boundsTo(point));
+    };
+    const up = (event: MouseEvent) => {
+      if (!start) return;
+      if (box) {
+        suppressClick = true;
+        onAreaSelectRef.current?.(boundsTo(map.mouseEventToContainerPoint(event)));
+      }
+      reset();
+    };
+    const click = (event: MouseEvent) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      event.stopPropagation();
+    };
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") reset(); };
+    container.addEventListener("mousedown", down);
+    container.addEventListener("click", click, true);
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+    document.addEventListener("keydown", key);
+    return () => {
+      container.removeEventListener("mousedown", down);
+      container.removeEventListener("click", click, true);
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+      document.removeEventListener("keydown", key);
+      reset();
+      container.style.cursor = previousCursor;
+      if (wasDragging) map.dragging.enable();
+      if (wasBoxZoom) map.boxZoom.enable();
+    };
+  }, [selectingArea]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -453,5 +583,14 @@ export function Map({
     [interactive, mode],
   );
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full" />
+      {(tools || measurable) && <div className="absolute top-[84px] left-[10px] z-[500] flex flex-col items-start gap-2">
+        {tools}
+        {measurable && mapInstance && <MapRuler map={mapInstance} outlines={planarOutlines} hoveredId={hoveredId}
+          tool={activeRulerTool} available={rulerAvailable} onToolChange={setRulerTool} />}
+      </div>}
+    </div>
+  );
 }

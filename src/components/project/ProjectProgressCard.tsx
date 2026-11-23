@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Alert, Badge, Progress, Skeleton, Typography } from "antd";
-import { DownOutlined } from "@ant-design/icons";
+import { DownOutlined, HourglassOutlined } from "@ant-design/icons";
 import { palette } from "../../theme";
-import type { ProjectProgress, StageProgress } from "../../api";
+import type { ProjectProgress, QueuePosition, StageProgress } from "../../api";
 import { describeStatus, overallPercent } from "./progressStatus";
 
 const DOWNLOADED_COLOR = palette.primaryMuted;
@@ -30,6 +30,33 @@ function StageRow({ label, stage, color }: { label: string; stage: StageProgress
         </span>
       </div>
       <Progress percent={percentOf(stage)} strokeColor={color} size="small" />
+    </div>
+  );
+}
+
+function QueueBanner({ queue }: { queue: QueuePosition }) {
+  if (queue.nextPosition === null || queue.queued === 0) return null;
+  const ahead = queue.nextPosition - 1;
+  const sheets = (count: number) => `${count} sheet${count === 1 ? "" : "s"}`;
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-3 border-b border-app-border bg-brand-soft px-4 py-3"
+    >
+      <HourglassOutlined className="text-lg text-brand-ink" />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold tracking-[0.08em] text-brand-ink uppercase">
+          {ahead === 0 ? "Next in analysis queue" : "Analysis queue position"}
+        </div>
+        <div className="text-xs text-secondary">
+          {ahead === 0 ? "Nothing ahead" : `${sheets(ahead)} ahead`} · {sheets(queue.queued)} of this project queued
+          {queue.lastPosition !== null && queue.lastPosition !== queue.nextPosition && <>, last at #{queue.lastPosition}</>}
+        </div>
+      </div>
+      <div className="text-right leading-none">
+        <div className="text-2xl font-semibold tabular-nums text-brand-ink">#{queue.nextPosition}</div>
+        <div className="mt-1 text-xs tabular-nums text-muted">of {queue.total}</div>
+      </div>
     </div>
   );
 }
@@ -69,6 +96,7 @@ export function ProjectProgressCard({
           : progress.discovery?.status === "FAILED" ? "Feature discovery failed. An editor can retry it for this project."
           : "Waiting for discovery information. Processing status refreshes automatically."}
       />}
+      {progress.queue && <QueueBanner queue={progress.queue} />}
       <button
         type="button"
         aria-expanded={expanded}
