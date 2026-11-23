@@ -5,6 +5,8 @@ import { CRS_2180 } from "../geo/projections";
 import { palette } from "../theme";
 import { toPlanar, type PlanarOutline } from "../geo/measure";
 import { MapRuler, type RulerTool } from "./MapRuler";
+import { MapSearch } from "./MapSearch";
+import type { GeoBounds } from "../geo/search/types";
 
 const HIGH_RESOLUTION_ERROR_TILE_URL =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Crect width='100%25' height='100%25' fill='%23ef4444' fill-opacity='.35'/%3E%3C/svg%3E";
@@ -16,6 +18,12 @@ const POLAND_BOUNDS = L.latLngBounds(
   POLAND_SOUTH_WEST.toBounds(POLAND_BOUNDS_BUFFER_METERS * 2).getSouthWest(),
   POLAND_NORTH_EAST.toBounds(POLAND_BOUNDS_BUFFER_METERS * 2).getNorthEast(),
 );
+const POLAND_SEARCH_BOUNDS: GeoBounds = {
+  north: POLAND_BOUNDS.getNorth(),
+  east: POLAND_BOUNDS.getEast(),
+  south: POLAND_BOUNDS.getSouth(),
+  west: POLAND_BOUNDS.getWest(),
+};
 const PWR_B4_CENTER = L.latLng(51.108316, 17.065122);
 const INITIAL_ZOOM = 10;
 
@@ -142,6 +150,7 @@ interface MapProps {
   onPolygonDrawCancel?: () => void;
   onAreaSelect?: (bounds: L.LatLngBounds) => void;
   measurable?: boolean;
+  searchable?: boolean;
   tools?: ReactNode;
 }
 
@@ -162,6 +171,7 @@ export function Map({
   onPolygonDrawCancel,
   onAreaSelect,
   measurable = false,
+  searchable = interactive && mode === "draw-rectangle",
   tools,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -550,6 +560,7 @@ export function Map({
       };
 
       const handleKeyDown = (event: KeyboardEvent) => {
+        if ((event.target as HTMLElement)?.closest("input,textarea,select")) return;
         if (event.key === "Escape") {
           cancel();
         }
@@ -586,6 +597,9 @@ export function Map({
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
+      {searchable && mapInstance && <div className="absolute top-2.5 left-13.5 z-600 w-[min(340px,calc(100%-116px))]">
+        <MapSearch map={mapInstance} bounds={POLAND_SEARCH_BOUNDS} />
+      </div>}
       {(tools || measurable) && <div className="absolute top-[84px] left-[10px] z-[500] flex flex-col items-start gap-2">
         {tools}
         {measurable && mapInstance && <MapRuler map={mapInstance} outlines={planarOutlines} hoveredId={hoveredId}
