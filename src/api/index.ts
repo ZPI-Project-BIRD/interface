@@ -26,6 +26,10 @@ export type { Organization, OrganizationMembership } from "./contracts/organizat
 export type {
   CreateProjectPayload,
   Detection,
+  DetectionBounds,
+  DetectionGeometry,
+  DetectionType,
+  LineCoordinates,
   FeatureDetections,
   Point,
   PolygonCoordinates,

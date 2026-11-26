@@ -53,12 +53,18 @@ export interface SourceFeature {
   fileSize: number | null;
 }
 
-export type PolygonCoordinates = [number, number][][];
+export type LineCoordinates = [number, number][];
+export type PolygonCoordinates = LineCoordinates[];
+export type DetectionType = "building" | "forest" | "water" | "road";
+export type DetectionGeometry =
+  | { type: "building" | "forest" | "water"; coordinates: PolygonCoordinates[] }
+  | { type: "road"; coordinates: LineCoordinates[]; width_m: (number | null)[] };
+export type DetectionBounds = PolygonCoordinates[] | DetectionGeometry | null;
 
 export interface Detection {
   id: string;
   recognitionJobId: string | null;
-  bounds: PolygonCoordinates[] | null;
+  bounds: DetectionBounds;
   version: number;
   source: "MODEL" | "MANUAL";
   verifiedBy: string | null;

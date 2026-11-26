@@ -1,13 +1,8 @@
 import { useState } from "react";
 import { Alert, Empty, Skeleton } from "antd";
 import { AimOutlined, DownOutlined } from "@ant-design/icons";
-import { formatArea } from "../../geo/area";
-
-export interface SheetDetections {
-  featureId: string;
-  buildingCount: number;
-  footprintAreaM2: number;
-}
+import { formatArea, formatLength } from "../../geo/area";
+import { DETECTION_STYLES, DETECTION_TYPES, type SheetDetections } from "../../projects/detections";
 
 const numberFormat = new Intl.NumberFormat();
 
@@ -36,8 +31,8 @@ export function DetectionList({
   onSelect,
 }: DetectionListProps) {
   const [expanded, setExpanded] = useState(true);
-  const buildingCount = sheets?.reduce((sum, sheet) => sum + sheet.buildingCount, 0) ?? 0;
-  const footprintAreaM2 = sheets?.reduce((sum, sheet) => sum + sheet.footprintAreaM2, 0) ?? 0;
+  const totalCount = sheets?.reduce((sum, sheet) => sum + sheet.totalCount, 0) ?? 0;
+  const footprintAreaM2 = sheets?.reduce((sum, sheet) => sum + sheet.areasM2.building, 0) ?? 0;
 
   return (
     <section className="app-card overflow-hidden">
@@ -51,7 +46,7 @@ export function DetectionList({
           Detections
           {sheets && (
             <span className="ml-2 text-sm font-normal text-muted tabular-nums">
-              {numberFormat.format(buildingCount)}
+              {numberFormat.format(totalCount)}
             </span>
           )}
         </span>
@@ -73,13 +68,13 @@ export function DetectionList({
           {sheets && (
             <>
               <div className="grid grid-cols-2 gap-2">
-                <Statistic label="Buildings" value={numberFormat.format(buildingCount)} />
+                {DETECTION_TYPES.map((type) => <Statistic key={type} label={DETECTION_STYLES[type].label}
+                  value={numberFormat.format(sheets.reduce((sum, sheet) => sum + sheet.counts[type], 0))} />)}
                 <Statistic label="Sheets with detections" value={numberFormat.format(sheets.length)} />
-                <Statistic label="Footprint area" value={formatArea(footprintAreaM2)} />
-                <Statistic
-                  label="Average footprint"
-                  value={buildingCount === 0 ? "–" : formatArea(footprintAreaM2 / buildingCount)}
-                />
+                <Statistic label="Building footprint" value={formatArea(footprintAreaM2)} />
+                <Statistic label="Forest area" value={formatArea(sheets.reduce((sum, sheet) => sum + sheet.areasM2.forest, 0))} />
+                <Statistic label="Water area" value={formatArea(sheets.reduce((sum, sheet) => sum + sheet.areasM2.water, 0))} />
+                <Statistic label="Road length" value={formatLength(sheets.reduce((sum, sheet) => sum + sheet.roadLengthM, 0))} />
               </div>
 
               {sheets.length === 0 ? (
@@ -107,8 +102,8 @@ export function DetectionList({
                               {sheet.featureId}
                             </span>
                             <span className="block text-xs text-muted tabular-nums">
-                              {numberFormat.format(sheet.buildingCount)} buildings ·{" "}
-                              {formatArea(sheet.footprintAreaM2)}
+                              {DETECTION_TYPES.filter((type) => sheet.counts[type] > 0).map((type) =>
+                                `${numberFormat.format(sheet.counts[type])} ${DETECTION_STYLES[type].label.toLowerCase()}`).join(" · ")}
                             </span>
                           </span>
                         </button>

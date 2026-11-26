@@ -92,6 +92,15 @@ export interface MapPolygon {
   rings: L.LatLng[][];
   highlighted?: boolean;
   details?: MapPolygonDetails;
+  color?: string;
+}
+
+export interface MapLine {
+  id: string;
+  points: L.LatLng[];
+  color?: string;
+  highlighted?: boolean;
+  details?: MapPolygonDetails;
 }
 
 export interface MapPolygonDetails {
@@ -136,6 +145,7 @@ interface MapProps {
   interactive?: boolean;
   layer?: MapLayer;
   polygons?: MapPolygon[];
+  lines?: MapLine[];
   focusBounds?: L.LatLngBounds | null;
   onRectangleDraw?: (rectangle: RectangleBounds) => void;
   onDrawingChange?: (drawing: boolean) => void;
@@ -157,6 +167,7 @@ export function Map({
   interactive = true,
   layer,
   polygons,
+  lines,
   focusBounds,
   onRectangleDraw,
   onDrawingChange,
@@ -316,7 +327,7 @@ export function Map({
 
     const renderer = L.canvas({ padding: 0.5 });
     const layer = L.layerGroup(
-      polygons.map(({ id, rings, highlighted, details }) => {
+      polygons.map(({ id, rings, highlighted, details, color }) => {
         const style = {
           fillOpacity: highlighted ? 0.45 : 0.25,
           weight: highlighted ? 2 : 1.5,
@@ -325,7 +336,7 @@ export function Map({
           ...style,
           renderer,
           interactive: Boolean(onPolygonSelect || details || measurable),
-          color: highlighted ? palette.primary : "#f59e0b",
+          color: highlighted ? palette.primary : color ?? "#f59e0b",
         });
         if (onPolygonSelect)
           polygon.on("click", () => {
@@ -354,6 +365,25 @@ export function Map({
       renderer.remove();
     };
   }, [polygons, onPolygonSelect, measurable]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !lines?.length) return;
+    const renderer = L.canvas({ padding: 0.5 });
+    const layer = L.layerGroup(lines.map(({ id, points, color, highlighted, details }) => {
+      const weight = highlighted ? 6 : 4;
+      const line = L.polyline(points, { renderer, color: highlighted ? palette.primary : color ?? "#a855f7", weight,
+        interactive: Boolean(onPolygonSelect || details) });
+      if (onPolygonSelect) line.on("click", () => {
+        if (activeRulerToolRef.current === "off") onPolygonSelect(id);
+      });
+      if (details) line.bindTooltip(createDetailsTooltip(details), { sticky: true, direction: "top", offset: [0, -8] });
+      line.on("mouseover", () => line.setStyle({ weight: weight + 2 }));
+      line.on("mouseout", () => line.setStyle({ weight }));
+      return line;
+    })).addTo(map);
+    return () => { layer.remove(); renderer.remove(); };
+  }, [lines, onPolygonSelect]);
 
   useEffect(() => {
     const map = mapRef.current;

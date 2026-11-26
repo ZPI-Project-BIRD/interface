@@ -1,7 +1,7 @@
 import * as L from "leaflet";
 import proj4 from "proj4";
 import "proj4leaflet";
-import type { PolygonCoordinates } from "../api";
+export { polygonAreaM2 } from "./geometry";
 import { EPSG_2180 } from "./crs";
 
 const SCALE_DENOMINATORS = [
@@ -39,20 +39,4 @@ export function planarToLatLng([x, y]: [number, number]): L.LatLng | null {
 
   const [longitude, latitude] = converter.forward([x, y]);
   return L.latLng(latitude, longitude);
-}
-
-export function polygonAreaM2([outer, ...holes]: PolygonCoordinates): number {
-  return ringArea(outer ?? []) - holes.reduce((sum, hole) => sum + ringArea(hole), 0);
-}
-
-function ringArea(ring: [number, number][]): number {
-  let doubled = 0;
-
-  for (let i = 0; i < ring.length; i++) {
-    const [x1, y1] = ring[i];
-    const [x2, y2] = ring[(i + 1) % ring.length];
-    doubled += x1 * y2 - x2 * y1;
-  }
-
-  return Math.abs(doubled) / 2;
 }

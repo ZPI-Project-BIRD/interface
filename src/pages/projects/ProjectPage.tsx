@@ -2,13 +2,13 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Button, Flex, Spin, Typography, message } from "antd";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, type FeatureDetections } from "../../api";
+import { api } from "../../api";
 import CrudPageLayout from "../../components/ProjectsPageLayout";
 import { ProjectProgressCard } from "../../components/project/ProjectProgressCard";
 import { ProjectDangerZone } from "../../components/project/ProjectDangerZone";
-import { DetectionList, type SheetDetections } from "../../components/project/DetectionList";
+import { DetectionList } from "../../components/project/DetectionList";
 import { calculateAreaKm2 } from "../../geo/area";
-import { polygonAreaM2 } from "../../geo/projections";
+import { sheetDetections } from "../../projects/detections";
 import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
 import { privateQueryKey } from "../../queryClient";
 import { useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
@@ -20,16 +20,6 @@ import { SourceFeatures } from "../../components/project/SourceFeatures";
 
 const PROGRESS_REFRESH_SECONDS = 10;
 const DETECTIONS_REFRESH_SECONDS = 30;
-
-function toSheetGeometry({ featureId, detections }: FeatureDetections): SheetDetections {
-  const polygons = detections.flatMap((detection) => detection.bounds ?? []);
-
-  return {
-    featureId,
-    buildingCount: polygons.length,
-    footprintAreaM2: polygons.reduce((sum, polygon) => sum + polygonAreaM2(polygon), 0),
-  };
-}
 
 function formatPoint(latitude: number, longitude: number) {
   return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
@@ -99,9 +89,9 @@ function ProjectPage() {
   const sheets = useMemo(
     () =>
       detectionsQuery.data
-        ?.map(toSheetGeometry)
-        .filter((sheet) => sheet.buildingCount > 0)
-        .toSorted((left, right) => right.buildingCount - left.buildingCount),
+        ?.map(sheetDetections)
+        .filter((sheet) => sheet.totalCount > 0)
+        .toSorted((left, right) => right.totalCount - left.totalCount),
     [detectionsQuery.data],
   );
 
