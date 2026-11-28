@@ -1,6 +1,6 @@
 import proj4 from "proj4";
 import { EPSG_2180 } from "./crs";
-import type { PolygonCoordinates } from "../api";
+import type { PolygonCoordinates, Project } from "../api";
 
 export type AnnotationCrs = "EPSG:2180" | 5 | 6 | 7 | 8;
 
@@ -21,6 +21,29 @@ export function annotationCrs(bounds: PolygonCoordinates[]): AnnotationCrs {
 export function projectVertex(point: { lat: number; lng: number }, crs: AnnotationCrs): [number, number] {
   const [x, y] = proj4("WGS84", definition(crs), [point.lng, point.lat]);
   return [x, y];
+}
+
+export function projectPerimeter(project: Pick<Project, "topLeft" | "bottomRight">, crs: AnnotationCrs): PolygonCoordinates[] {
+  const { topLeft, bottomRight } = project;
+  // Match the straight edges of the project rectangle on the EPSG:2180 map.
+  const corners = [
+    { lat: topLeft.latitude, lng: topLeft.longitude },
+    { lat: topLeft.latitude, lng: bottomRight.longitude },
+    { lat: bottomRight.latitude, lng: bottomRight.longitude },
+    { lat: bottomRight.latitude, lng: topLeft.longitude },
+  ].map((point) => projectVertex(point, "EPSG:2180"));
+  const ring: [number, number][] = [];
+  for (let i = 0; i < corners.length; i++) {
+    const a = corners[i], b = corners[(i + 1) % corners.length];
+    // Densify before transforming legacy PL-2000 drafts so their boundary
+    // follows the same map rectangle after changing projection.
+    const steps = crs === "EPSG:2180" ? 1 : Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 100));
+    for (let j = 0; j < steps; j++) {
+      const point: [number, number] = [a[0] + (b[0] - a[0]) * j / steps, a[1] + (b[1] - a[1]) * j / steps];
+      ring.push(crs === "EPSG:2180" ? point : proj4(EPSG_2180, definition(crs), point) as [number, number]);
+    }
+  }
+  return [[[...ring, ring[0]]]];
 }
 
 export function replaceOutline(bounds: PolygonCoordinates[], index: number, rings: { lat: number; lng: number }[][], crs: AnnotationCrs): PolygonCoordinates[] {

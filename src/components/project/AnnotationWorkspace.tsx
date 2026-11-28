@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ArrowLeftOutlined, CloseOutlined, SelectOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, CloseOutlined, SelectOutlined, HighlightOutlined, ClearOutlined, UndoOutlined, RedoOutlined } from "@ant-design/icons";
 import { Alert, Button, InputNumber, Modal, Popconfirm, Select, Space, Tag, Typography } from "antd";
 import * as L from "leaflet";
 import { useMutation, useQueryClient } from "react-query";
@@ -7,12 +7,13 @@ import { api, ApiError, type Detection, type FeatureDetections, type Project, ty
 import { useOrganizationCapabilities } from "../../hooks/useOrganizationCapabilities";
 import { privateQueryKey } from "../../queryClient";
 import { isCurrentSession, useAuthStore, withSession } from "../../stores/authStore";
+import { applyBrushStroke, type BrushTool } from "../../geo/brush";
 import { planarToLatLng } from "../../geo/projections";
 import { detectionLayers } from "../../geo/detectionLayers";
 import { detectionDetails } from "../../geo/detectionDetails";
 import { canEditDetection, removeDetectionShapes, detectionCount, detectionGeometry, detectionPoints, detectionShapePoints, DETECTION_STYLES, DETECTION_TYPES } from "../../projects/detections";
 import type { DetectionType } from "../../api";
-import { annotationCrs, projectVertex, removeOutlineVertex, replaceOutline } from "../../geo/annotationCoordinates";
+import { annotationCrs, projectPerimeter, projectVertex, removeOutlineVertex, replaceOutline } from "../../geo/annotationCoordinates";
 import { annotationDraftKey, annotationBounds, editableGeometry, removeDraftShapes, type AnnotationDraft, type DraftUpdate } from "../../projects/annotationDrafts";
 import { AnnotationNavigationGuard } from "./AnnotationNavigationGuard";
 import { mergeAnnotation } from "../../projects/annotations";
@@ -20,6 +21,9 @@ import { Map } from "../Map";
 import { MapToolButton } from "../MapToolButton";
 import { AnnotationHistory } from "./AnnotationHistory";
 import { MutationFeedback } from "../MutationFeedback";
+
+type BrushSnapshot = Pick<AnnotationDraft, "bounds" | "roadWidths">;
+const brushSnapshot = ({ bounds, roadWidths }: AnnotationDraft): BrushSnapshot => structuredClone({ bounds, roadWidths });
 
 type Change = { kind: "save"; draft: AnnotationDraft } | { kind: "delete" | "verify"; featureId: string; detection: Detection };
 
@@ -37,6 +41,11 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   const [selection, setSelection] = useState<{ id: string; outline: number; scope?: "result" } | undefined>(() =>
     draft ? { id: draft.id ?? "new", outline: 0 } : undefined);
   const [drawing, setDrawing] = useState(false);
+  const [brushTool, setBrushTool] = useState<BrushTool | null>(null);
+  const [brushDiameter, setBrushDiameter] = useState(10);
+  const [brushDrawing, setBrushDrawing] = useState(false);
+  const [brushError, setBrushError] = useState<string>();
+  const [strokes, setStrokes] = useState<{ past: BrushSnapshot[]; future: BrushSnapshot[] }>({ past: [], future: [] });
   const [corner, setCorner] = useState(0);
   const [ringIndex, setRingIndex] = useState(0);
   const selectedVertex = useMemo(() => ({ ringIndex, index: corner }), [ringIndex, corner]);
@@ -54,6 +63,10 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
     if (!access.canAnnotate) throw new Error("You cannot change results in this organization.");
     if (change.kind === "save") {
       const value = change.draft;
+      if (value.id && !value.bounds.length) {
+        await api.projects.deleteDetection(organizationId, project.id, value.id, value.expectedVersion);
+        return { deletedId: value.id };
+      }
       return value.id ? api.projects.updateDetection(organizationId, project.id, value.id, value.expectedVersion, annotationBounds(value))
         : api.projects.createDetection(organizationId, project.id, value.featureId, annotationBounds(value));
     }
@@ -75,7 +88,7 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
         client.setQueryData<FeatureDetections[]>(detectionKey, (current) => mergeAnnotation(current ?? [], result));
         setSelection((current) => (current?.id === result.id ? current : { id: result.id, outline: 0 }));
       }
-      setDraft(undefined); setDrawing(false); setRingIndex(0); setCorner(0);
+      setDraft(undefined); setDrawing(false); setBrushTool(null); setStrokes({ past: [], future: [] }); setBrushError(undefined); setRingIndex(0); setCorner(0);
       void client.invalidateQueries(detectionKey);
       void client.invalidateQueries(privateQueryKey(sessionId, "annotation-history", organizationId, project.id));
     },
@@ -119,7 +132,7 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
 
   const choose = useCallback((id: string) => {
     const [detectionId, position] = id.split(":");
-    const select = () => { setDraft(undefined); setDrawing(false); setSelection({ id: detectionId, outline: Number(position ?? 0) }); setRingIndex(0); setCorner(0); change.reset(); removal.reset(); };
+    const select = () => { setDraft(undefined); setDrawing(false); setBrushTool(null); setStrokes({ past: [], future: [] }); setBrushError(undefined); setSelection({ id: detectionId, outline: Number(position ?? 0) }); setRingIndex(0); setCorner(0); change.reset(); removal.reset(); };
     if (draft) modal.confirm({ title: "Discard unsaved outline changes?", onOk: select });
     else select();
   }, [draft, modal, change, removal, setDraft]);
@@ -160,14 +173,16 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   const draftLayers = useMemo(() => {
     if (!draft) return { polygons: [], lines: [] };
     const layers = detectionLayers(annotationBounds(draft), "draft", { highlighted: () => true, title: "Draft" });
-    return { polygons: layers.polygons.filter(({ id }) => !access.canAnnotate || id !== `draft:${outlineIndex}`),
-      lines: layers.lines.filter(({ id }) => !access.canAnnotate || id !== `draft:${outlineIndex}`) };
-  }, [draft, outlineIndex, access.canAnnotate]);
+    return { polygons: layers.polygons.filter(({ id }) => !access.canAnnotate || Boolean(brushTool) || drawing || id !== `draft:${outlineIndex}`),
+      lines: layers.lines.filter(({ id }) => !access.canAnnotate || Boolean(brushTool) || drawing || id !== `draft:${outlineIndex}`) };
+  }, [draft, outlineIndex, access.canAnnotate, brushTool, drawing]);
   const editableRings = useMemo(() => draft?.bounds[outlineIndex]?.map((ring) => ring.map(planarToLatLng).filter((point) => point !== null)), [draft, outlineIndex]);
   const updateRings = useCallback((rings: L.LatLng[][]) => {
+    setStrokes({ past: [], future: [] });
     setDraft((value) => value && ({ ...value, bounds: replaceOutline(value.bounds, outlineIndex, rings, value.crs) }));
   }, [outlineIndex, setDraft]);
   const finishDrawing = useCallback((ring: L.LatLng[]) => {
+    setStrokes({ past: [], future: [] });
     setDraft((value) => value && ({ ...value, bounds: [...value.bounds, [ring.map((point) => projectVertex(point, value.crs))]],
       roadWidths: value.geometryType === "road" ? [...value.roadWidths ?? [], null] : undefined }));
     setSelection((value) => ({ id: value?.id ?? "new", outline: draft?.bounds.length ?? 0 }));
@@ -185,7 +200,7 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   const mapLines = useMemo(() => [...lines, ...draftLayers.lines], [lines, draftLayers]);
   const rectangle = useMemo(() => ({ north: project.topLeft.latitude, west: project.topLeft.longitude,
     south: project.bottomRight.latitude, east: project.bottomRight.longitude }), [project]);
-  const discard = () => { setDraft(undefined); setDrawing(false); change.reset(); };
+  const discard = () => { setDraft(undefined); setDrawing(false); setBrushTool(null); setStrokes({ past: [], future: [] }); setBrushError(undefined); change.reset(); };
   const conflict = change.error instanceof ApiError && change.error.status === 409;
   const uncertain = change.error instanceof ApiError && (change.error.status === 0 || change.error.status >= 500);
   const blocked = change.isLoading || conflict || uncertain || !access.canAnnotate;
@@ -196,7 +211,7 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   };
   const startEditing = () => {
     if (!selected || !canEditDetection(selected.detection.bounds)) return;
-    change.reset();
+    change.reset(); setBrushTool(null); setStrokes({ past: [], future: [] }); setBrushError(undefined);
     setSelection({ id: selected.detection.id, outline: Math.min(outlineIndex, detectionCount(selected.detection.bounds) - 1) });
     try {
       const geometry = editableGeometry(selected.detection.bounds);
@@ -220,6 +235,7 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
   };
   const removeVertex = useCallback((ringIndex: number, vertexIndex: number) => {
     if (blocked || drawing) return;
+    setStrokes({ past: [], future: [] });
     setDraft((value) => {
       if (!value) return value;
       const bounds = removeOutlineVertex(value.bounds, outlineIndex, ringIndex, vertexIndex, value.geometryType !== "road");
@@ -227,6 +243,31 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
     });
     setRingIndex(ringIndex); setCorner(0);
   }, [blocked, drawing, outlineIndex, setDraft]);
+  const changeBrushTool = (tool: BrushTool | null) => {
+    setDrawing(false); setBrushTool(tool); setBrushError(undefined);
+  };
+  const brushPerimeter = useMemo(() => projectPerimeter(project, draft?.crs ?? "EPSG:2180"), [project, draft?.crs]);
+  const brushStroke = useCallback((points: L.LatLng[]) => {
+    if (!draft || !brushTool || blocked) return;
+    try {
+      const next = applyBrushStroke(draft, points.map((point) => projectVertex(point, draft.crs)), brushDiameter, brushTool, brushPerimeter);
+      if (JSON.stringify(next.bounds) === JSON.stringify(draft.bounds) && JSON.stringify(next.roadWidths) === JSON.stringify(draft.roadWidths)) return;
+      setStrokes((history) => ({ past: [...history.past, brushSnapshot(draft)].slice(-20), future: [] }));
+      setDraft(next);
+      setSelection((current) => ({ id: next.id ?? "new", outline: Math.min(current?.outline ?? 0, Math.max(0, next.bounds.length - 1)) }));
+      setRingIndex(0); setCorner(0); setBrushError(undefined);
+    } catch (error) { setBrushError(error instanceof Error ? error.message : "Could not apply the brush stroke."); }
+  }, [draft, brushTool, blocked, brushDiameter, brushPerimeter, setDraft]);
+  const restoreStroke = (direction: "undo" | "redo") => {
+    if (!draft || blocked || brushDrawing) return;
+    const stack = direction === "undo" ? strokes.past : strokes.future;
+    const previous = stack.at(-1);
+    if (!previous) return;
+    setStrokes(direction === "undo" ? { past: strokes.past.slice(0, -1), future: [...strokes.future, brushSnapshot(draft)] }
+      : { past: [...strokes.past, brushSnapshot(draft)].slice(-20), future: strokes.future.slice(0, -1) });
+    setDraft({ ...draft, ...previous }); setSelection({ id: draft.id ?? "new", outline: 0 }); setRingIndex(0); setCorner(0); setBrushError(undefined);
+  };
+  const stopBrush = useCallback(() => setBrushTool(null), []);
   return <div className="flex h-full min-h-[500px] flex-col">
     {modalContext}
     <AnnotationNavigationGuard hasDraft={Boolean(draft)} pending={change.isLoading} onDiscard={discard} />
@@ -238,6 +279,10 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
           change.reset(); setDraft({ featureId: selectedFeatureId ?? features![0].id, expectedVersion: 0, bounds: [], crs: "EPSG:2180" });
           setSelection({ id: "new", outline: 0 }); setDrawing(true);
         }}>Add detection</Button>}
+        {access.canAnnotate && <Button icon={<HighlightOutlined />} disabled={Boolean(picked) || Boolean(draft) || blocked || !features?.length} onClick={() => {
+          change.reset(); setDraft({ featureId: selectedFeatureId ?? features![0].id, expectedVersion: 0, bounds: [], crs: "EPSG:2180", geometryType: "building" });
+          setSelection({ id: "new", outline: 0 }); setDrawing(false); setBrushTool("paint"); setBrushError(undefined); setStrokes({ past: [], future: [] });
+        }}>Paint detection</Button>}
       </Space>
     </div>
     <div className="flex flex-wrap gap-2 border-b border-app-border bg-surface px-4 py-2" aria-label="Detection layers">
@@ -254,18 +299,23 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
     <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
       <div className="relative min-h-[400px] flex-1">
         <Map mode="browse" rectangle={rectangle}
-          polygons={mapPolygons} lines={mapLines} closedGeometry={!editingRoad} focusBounds={focus} measurable
+          polygons={mapPolygons} lines={mapLines} closedGeometry={!editingRoad} focusBounds={brushTool ? undefined : focus} measurable
           tools={access.canAnnotate && <MapToolButton label={picked ? "Done selecting shapes" : "Select shapes to remove"} icon={<SelectOutlined />}
             active={Boolean(picked)} disabled={Boolean(draft) || drawing || removal.isLoading}
             onClick={() => { removal.reset(); setPicked(picked ? null : new Set()); }} />}
-          onPolygonSelect={picked ? (removal.isLoading ? undefined : toggleOutline) : draft || drawing ? undefined : choose}
+          onPolygonSelect={picked ? (removal.isLoading ? undefined : toggleOutline) : draft || drawing || brushTool ? undefined : choose}
           onAreaSelect={picked && !removal.isLoading ? selectArea : undefined}
-          editableRings={draft && access.canAnnotate && !drawing && !change.isLoading ? editableRings : undefined}
+          editableRings={draft && access.canAnnotate && !drawing && !brushTool && !change.isLoading ? editableRings : undefined}
+          brushTool={draft && access.canAnnotate && !blocked ? brushTool : null} brushDiameterM={brushDiameter}
+          onBrushStroke={brushStroke} onBrushDrawingChange={setBrushDrawing} onBrushCancel={stopBrush}
           onRingsChange={updateRings} drawingPolygon={drawing && access.canAnnotate && !change.isLoading}
           onVertexRemove={!blocked && !drawing ? removeVertex : undefined}
           onVertexSelect={selectVertex} selectedVertex={selectedVertex}
           onPolygonDraw={finishDrawing} onPolygonDrawCancel={cancelDrawing} />
         {picked && <div className="app-card absolute top-3 left-14 z-[500] max-w-sm p-3 shadow-sm">Drag across the map to select shapes fully inside the box. Click a shape to add or remove it.</div>}
+        {brushTool && <div className="app-card absolute top-3 left-14 z-[500] max-w-sm p-3 shadow-sm">
+          {brushTool === "paint" ? "Drag to paint." : "Drag to erase."} Outlines stop at the project boundary. Changes apply to this result only. Release to preview; use Save to apply. Escape cancels a stroke.
+        </div>}
         {drawing && <div className="app-card absolute top-3 left-14 z-[500] max-w-sm p-3 shadow-sm">{editingRoad ? "Click each road node, then press Enter or double-click to finish." : "Click each corner, then click the first corner or press Enter to finish."} Escape cancels drawing.</div>}
       </div>
       <aside className="max-h-[45dvh] overflow-y-auto border-app-border bg-surface p-4 max-xl:border-t xl:max-h-none xl:w-80 xl:border-l">
@@ -357,34 +407,61 @@ export function AnnotationWorkspace({ project, groups, features, selectedFeature
         </>}
         {draft && <>
           {!access.canAnnotate && <Alert type="warning" title="Editing permissions unavailable" description="Your draft is kept. Refresh access or cancel editing." />}
-          {!draft.id && <><label htmlFor="manual-source">Source sheet</label><Select virtual={false} id="manual-source" className="mb-3 w-full" value={draft.featureId} disabled={blocked}
+          {!draft.id && <><label htmlFor="manual-source">Source sheet</label><Select virtual={false} id="manual-source" className="mb-3 w-full" value={draft.featureId} disabled={blocked || brushDrawing}
             onChange={(featureId) => setDraft({ ...draft, featureId })} options={features?.map(({ id }) => ({ value: id, label: id }))} /></>}
-          {draft.bounds.length > 0 && <Select virtual={false} aria-label="Editing shape" className="mb-3 w-full" value={outlineIndex} disabled={blocked || drawing} onChange={(outline) => { setSelection({ id: draft.id ?? "new", outline }); setRingIndex(0); setCorner(0); }}
+          {!draft.id && <label className="mb-3 block text-sm">Detection type
+            <Select virtual={false} aria-label="Detection type" className="w-full" value={draft.geometryType ?? "building"}
+              disabled={blocked || brushDrawing || drawing || draft.bounds.length > 0} onChange={(geometryType) => { setStrokes({ past: [], future: [] }); setDraft({ ...draft, geometryType, roadWidths: geometryType === "road" ? [] : undefined }); }}
+              options={DETECTION_TYPES.map((type) => ({ value: type, label: DETECTION_STYLES[type].singular }))} />
+          </label>}
+          <div className="mb-3 grid gap-3" role="group" aria-label="Outline editing tools">
+            <Space.Compact block>
+              <Button aria-pressed={!brushTool} className="flex-1" type={!brushTool ? "primary" : "default"} disabled={blocked || brushDrawing} onClick={() => changeBrushTool(null)}>Vertices</Button>
+              <Button aria-pressed={brushTool === "paint"} className="flex-1" icon={<HighlightOutlined />} type={brushTool === "paint" ? "primary" : "default"} disabled={blocked || brushDrawing} onClick={() => changeBrushTool("paint")}>Brush</Button>
+              <Button aria-pressed={brushTool === "erase"} className="flex-1" icon={<ClearOutlined />} type={brushTool === "erase" ? "primary" : "default"} disabled={blocked || brushDrawing} onClick={() => changeBrushTool("erase")}>Eraser</Button>
+            </Space.Compact>
+            {brushTool && <>
+              <label className="text-sm">Brush size (m)
+                <InputNumber aria-label="Brush size in metres" className="!w-full" value={brushDiameter} min={0.5} max={100} step={0.5} precision={1}
+                  disabled={blocked || brushDrawing} onChange={(value) => { if (value !== null) setBrushDiameter(value); }} />
+              </label>
+              <Space><Button icon={<UndoOutlined />} disabled={blocked || brushDrawing || !strokes.past.length} onClick={() => restoreStroke("undo")}>Undo stroke</Button>
+                <Button icon={<RedoOutlined />} disabled={blocked || brushDrawing || !strokes.future.length} onClick={() => restoreStroke("redo")}>Redo stroke</Button></Space>
+              <p className="m-0 text-sm text-muted">{editingRoad ? "Paint a centreline with at least two nodes. New roads use the brush size as their width; erasing keeps each remaining segment's width." : "Brush adds area; eraser removes it. Strokes can join outlines, cut holes or split an outline."} All changes stay in your draft until you save.</p>
+            </>}
+            {brushError && <Alert type="error" showIcon title="Stroke was not applied" description={brushError} />}
+          </div>
+          {draft.bounds.length > 0 && <Select virtual={false} aria-label="Editing shape" className="mb-3 w-full" value={outlineIndex} disabled={blocked || drawing || brushDrawing} onChange={(outline) => { setSelection({ id: draft.id ?? "new", outline }); setRingIndex(0); setCorner(0); }}
             options={draft.bounds.map((_, index) => ({ value: index, label: `${editingRoad ? "Road" : "Outline"} ${index + 1} of ${draft.bounds.length}` }))} />}
-          <p className="text-sm">Drag the white handles to move nodes. Right-click a handle to delete it, or select a node below and delete it. {editingRoad ? "Roads must keep at least two nodes." : "Each ring must keep at least three corners."} Saving geometry clears its previous verification.</p>
-          {!editingRoad && (editableRings?.length ?? 0) > 1 && <Select virtual={false} aria-label="Polygon ring" className="mb-3 w-full"
+          {!brushTool && <p className="text-sm">Drag the white handles to move nodes. Right-click a handle to delete it, or select a node below and delete it. {editingRoad ? "Roads must keep at least two nodes." : "Each ring must keep at least three corners."} Saving geometry clears its previous verification.</p>}
+          {!brushTool && !editingRoad && (editableRings?.length ?? 0) > 1 && <Select virtual={false} aria-label="Polygon ring" className="mb-3 w-full"
             value={ringIndex} disabled={blocked || drawing} onChange={(index) => { setRingIndex(index); setCorner(0); }}
             options={editableRings?.map((_, index) => ({ value: index, label: index === 0 ? "Exterior ring" : `Hole ${index}` }))} />}
-          {point && !drawing && <div className="mb-3 grid gap-2">
+          {point && !drawing && !brushTool && <div className="mb-3 grid gap-2">
             <Select virtual={false} aria-label={editingRoad ? "Road node" : "Corner"} value={corner} onChange={setCorner} disabled={blocked} options={(editingRoad ? editableRings?.[ringIndex] : editableRings?.[ringIndex].slice(0, -1))?.map((_, index) => ({ value: index, label: `${editingRoad ? "Node" : "Corner"} ${index + 1}` }))} />
             <label className="text-sm">Latitude<InputNumber aria-label="Corner latitude" className="!w-full" value={point.lat} min={-90} max={90} precision={7} step={0.000001} disabled={blocked} onChange={(value) => setCoordinate("lat", value)} /></label>
             <label className="text-sm">Longitude<InputNumber aria-label="Corner longitude" className="!w-full" value={point.lng} min={-180} max={180} precision={7} step={0.000001} disabled={blocked} onChange={(value) => setCoordinate("lng", value)} /></label>
             <Button danger disabled={blocked || (editableRings?.[ringIndex]?.length ?? 0) <= (editingRoad ? 2 : 4)} onClick={() => removeVertex(ringIndex, corner)}>Delete selected {editingRoad ? "node" : "corner"}</Button>
           </div>}
-          {editingRoad && <label className="mb-3 block text-sm">Road width (m)
+          {editingRoad && !brushTool && <label className="mb-3 block text-sm">Road width (m)
             <InputNumber aria-label="Road width in metres" className="!w-full" min={0.01} precision={2} value={draft.roadWidths?.[outlineIndex] ?? null}
-              placeholder="Unknown" disabled={blocked || drawing} onChange={(width: number | null) => setDraft((value) => value && ({ ...value,
-                roadWidths: value.bounds.map((_, index) => index === outlineIndex ? width : value.roadWidths?.[index] ?? null) }))} />
+              placeholder="Unknown" disabled={blocked || drawing || brushDrawing} onChange={(width: number | null) => { setStrokes({ past: [], future: [] }); setDraft((value) => value && ({ ...value,
+                roadWidths: value.bounds.map((_, index) => index === outlineIndex ? width : value.roadWidths?.[index] ?? null) })); }} />
           </label>}
           <Space wrap>
-            <Button disabled={drawing || blocked} onClick={() => setDrawing(true)}>Draw another {editingRoad ? "road" : "outline"}</Button>
-            {draft.bounds.length > 1 && <Button danger disabled={drawing || blocked} onClick={() => {
-              setDraft(removeDraftShapes(draft, new Set([outlineIndex]))); setSelection({ id: draft.id ?? "new", outline: 0 }); setRingIndex(0); setCorner(0);
+            <Button disabled={drawing || blocked || brushDrawing} onClick={() => { changeBrushTool(null); setDrawing(true); }}>Draw another {editingRoad ? "road" : "outline"}</Button>
+            {!brushTool && draft.bounds.length > 1 && <Button danger disabled={drawing || blocked || brushDrawing} onClick={() => {
+              setStrokes({ past: [], future: [] }); setDraft(removeDraftShapes(draft, new Set([outlineIndex]))); setSelection({ id: draft.id ?? "new", outline: 0 }); setRingIndex(0); setCorner(0);
             }}>Remove selected {editingRoad ? "road" : "outline"}</Button>}
             {drawing && <Button onClick={cancelDrawing}>Stop drawing</Button>}
-            <Button type="primary" disabled={!draft.featureId || !draft.bounds.length || drawing || conflict || uncertain || !access.canAnnotate}
-              loading={change.isLoading} onClick={() => change.mutate({ kind: "save", draft })}>Save {editingRoad ? "roads" : "outlines"}</Button>
-            <Popconfirm title="Discard unsaved changes?" onConfirm={discard}><Button disabled={change.isLoading}>Cancel editing</Button></Popconfirm>
+            <Popconfirm title="Delete the erased result?" description="The eraser removed every shape. Saving will delete this result."
+              disabled={!draft.id || draft.bounds.length > 0 || blocked || brushDrawing} okButtonProps={{ danger: true }}
+              onConfirm={() => change.mutateAsync({ kind: "save", draft })}>
+              <Button type="primary" danger={Boolean(draft.id) && !draft.bounds.length} disabled={!draft.featureId || (!draft.id && !draft.bounds.length) || drawing || brushDrawing || conflict || uncertain || !access.canAnnotate}
+                loading={change.isLoading} onClick={() => { if (draft.bounds.length) change.mutate({ kind: "save", draft }); }}>
+                {draft.id && !draft.bounds.length ? "Delete erased result" : `Save ${editingRoad ? "roads" : "outlines"}`}</Button>
+            </Popconfirm>
+            <Popconfirm title="Discard unsaved changes?" onConfirm={discard}><Button disabled={change.isLoading || brushDrawing}>Cancel editing</Button></Popconfirm>
           </Space>
         </>}
         <MutationFeedback error={change.error} conflict="This result changed while you were editing. Your draft is kept. Discard it and reload before making another change." />

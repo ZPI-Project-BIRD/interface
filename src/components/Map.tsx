@@ -6,6 +6,8 @@ import { palette } from "../theme";
 import { toPlanar, type PlanarOutline } from "../geo/measure";
 import { MapRuler, type RulerTool } from "./MapRuler";
 import { MapSearch } from "./MapSearch";
+import { MapBrush } from "./MapBrush";
+import type { BrushTool } from "../geo/brush";
 import type { GeoBounds } from "../geo/search/types";
 
 const HIGH_RESOLUTION_ERROR_TILE_URL =
@@ -156,6 +158,11 @@ interface MapProps {
   onVertexRemove?: (ringIndex: number, vertexIndex: number) => void;
   onVertexSelect?: (ringIndex: number, vertexIndex: number) => void;
   selectedVertex?: { ringIndex: number; index: number };
+  brushTool?: BrushTool | null;
+  brushDiameterM?: number;
+  onBrushStroke?: (points: L.LatLng[]) => void;
+  onBrushDrawingChange?: (drawing: boolean) => void;
+  onBrushCancel?: () => void;
   drawingPolygon?: boolean;
   onPolygonDraw?: (ring: L.LatLng[]) => void;
   onPolygonDrawCancel?: () => void;
@@ -182,6 +189,11 @@ export function Map({
   onVertexRemove,
   onVertexSelect,
   selectedVertex,
+  brushTool,
+  brushDiameterM = 10,
+  onBrushStroke,
+  onBrushDrawingChange,
+  onBrushCancel,
   drawingPolygon = false,
   onPolygonDraw,
   onPolygonDrawCancel,
@@ -197,7 +209,7 @@ export function Map({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rulerTool, setRulerTool] = useState<RulerTool>("off");
   const rulerAvailable =
-    measurable && mode === "browse" && !drawingPolygon && !onAreaSelect && !editableRings;
+    measurable && mode === "browse" && !drawingPolygon && !onAreaSelect && !editableRings && !brushTool;
   const activeRulerTool = rulerAvailable ? rulerTool : "off";
   const activeRulerToolRef = useRef(activeRulerTool);
   useEffect(() => {
@@ -698,6 +710,8 @@ export function Map({
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
+      {mapInstance && brushTool && onBrushStroke && <MapBrush map={mapInstance} tool={brushTool} diameterM={brushDiameterM}
+        onStroke={onBrushStroke} onDrawingChange={onBrushDrawingChange} onCancel={onBrushCancel} />}
       {searchable && mapInstance && (
         <div className="absolute top-2.5 left-13.5 z-600 w-[min(340px,calc(100%-116px))]">
           <MapSearch map={mapInstance} bounds={POLAND_SEARCH_BOUNDS} />
