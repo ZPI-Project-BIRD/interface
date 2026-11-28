@@ -1,4 +1,4 @@
-import type { DetectionBounds, DetectionGeometry, DetectionType, FeatureDetections, PolygonCoordinates } from "../api";
+import type { DetectionBounds, DetectionGeometry, DetectionType, FeatureDetections } from "../api";
 import { lineLengthM, polygonAreaM2 } from "../geo/geometry";
 
 export const DETECTION_TYPES: DetectionType[] = ["building", "forest", "water", "road"];
@@ -6,7 +6,7 @@ export const DETECTION_STYLES = {
   building: { label: "Buildings", singular: "Building", color: "#d97706" },
   forest: { label: "Forest", singular: "Forest", color: "#16a34a" },
   water: { label: "Water", singular: "Water", color: "#2563eb" },
-  road: { label: "Roads", singular: "Road", color: "#a855f7" },
+  road: { label: "Roads", singular: "Road", color: "#475569" },
 } as const;
 
 export function detectionGeometry(bounds: DetectionBounds): DetectionGeometry {
@@ -14,9 +14,17 @@ export function detectionGeometry(bounds: DetectionBounds): DetectionGeometry {
     : bounds ?? { type: "building", coordinates: [] };
 }
 
-// The current annotation API accepts only the original polygon-array format.
-export function canEditDetection(bounds: DetectionBounds): bounds is PolygonCoordinates[] {
-  return Array.isArray(bounds);
+export function canEditDetection(bounds: DetectionBounds): boolean {
+  return detectionCount(bounds) > 0;
+}
+
+export function removeDetectionShapes(bounds: DetectionBounds, removed: ReadonlySet<number>): Exclude<DetectionBounds, null> {
+  if (Array.isArray(bounds)) return bounds.filter((_, index) => !removed.has(index));
+  const geometry = detectionGeometry(bounds);
+  if (geometry.type === "road") return { ...geometry,
+    coordinates: geometry.coordinates.filter((_, index) => !removed.has(index)),
+    width_m: geometry.coordinates.flatMap((_, index) => removed.has(index) ? [] : [geometry.width_m?.[index] ?? null]) };
+  return { ...geometry, coordinates: geometry.coordinates.filter((_, index) => !removed.has(index)) };
 }
 
 export function detectionCount(bounds: DetectionBounds): number {
@@ -27,6 +35,11 @@ export function detectionPoints(bounds: DetectionBounds) {
   const geometry = detectionGeometry(bounds);
   return geometry.type === "road" ? geometry.coordinates.flat()
     : geometry.coordinates.flatMap((polygon) => polygon.flat());
+}
+
+export function detectionShapePoints(bounds: DetectionBounds, index: number) {
+  const geometry = detectionGeometry(bounds);
+  return geometry.type === "road" ? geometry.coordinates[index] ?? [] : geometry.coordinates[index]?.flat() ?? [];
 }
 
 export function roadWidth(geometry: Extract<DetectionGeometry, { type: "road" }>, index: number): number | null {

@@ -151,7 +151,11 @@ interface MapProps {
   onDrawingChange?: (drawing: boolean) => void;
   onPolygonSelect?: (id: string) => void;
   editableRings?: L.LatLng[][];
+  closedGeometry?: boolean;
   onRingsChange?: (rings: L.LatLng[][]) => void;
+  onVertexRemove?: (ringIndex: number, vertexIndex: number) => void;
+  onVertexSelect?: (ringIndex: number, vertexIndex: number) => void;
+  selectedVertex?: { ringIndex: number; index: number };
   drawingPolygon?: boolean;
   onPolygonDraw?: (ring: L.LatLng[]) => void;
   onPolygonDrawCancel?: () => void;
@@ -173,7 +177,11 @@ export function Map({
   onDrawingChange,
   onPolygonSelect,
   editableRings,
+  closedGeometry = true,
   onRingsChange,
+  onVertexRemove,
+  onVertexSelect,
+  selectedVertex,
   drawingPolygon = false,
   onPolygonDraw,
   onPolygonDrawCancel,
@@ -184,6 +192,7 @@ export function Map({
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const vertexHandlesRef = useRef<{ marker: L.Marker; ringIndex: number; index: number }[]>([]);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rulerTool, setRulerTool] = useState<RulerTool>("off");
@@ -320,83 +329,74 @@ export function Map({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || (!polygons?.length && !lines?.length)) return;
 
-    if (!map || !polygons?.length) {
-      return;
-    }
-
+    // One canvas lets Leaflet hit-test polygons and roads together. Separate
+    // canvases let the top canvas intercept clicks even between its shapes.
     const renderer = L.canvas({ padding: 0.5 });
-    const layer = L.layerGroup(
-      polygons.map(({ id, rings, highlighted, details, color }) => {
-        const style = {
-          fillOpacity: highlighted ? 0.45 : 0.25,
-          weight: highlighted ? 2 : 1.5,
-        };
-        const polygon = L.polygon(rings, {
-          ...style,
-          renderer,
-          interactive: Boolean(onPolygonSelect || details || measurable),
-          color: highlighted ? palette.primary : color ?? "#f59e0b",
-        });
-        if (onPolygonSelect)
-          polygon.on("click", () => {
-            if (activeRulerToolRef.current === "off") onPolygonSelect(id);
-          });
-        if (details)
-          polygon.bindTooltip(createDetailsTooltip(details), {
-            sticky: true,
-            direction: "top",
-            offset: [0, -8],
-          });
-        polygon.on("mouseover", () => {
-          polygon.setStyle({ fillOpacity: style.fillOpacity + 0.15, weight: style.weight + 1 });
-          setHoveredId(id);
-        });
-        polygon.on("mouseout", () => {
-          polygon.setStyle(style);
-          setHoveredId((current) => (current === id ? null : current));
-        });
-        return polygon;
-      }),
-    ).addTo(map);
-
-    return () => {
-      layer.remove();
-      renderer.remove();
-    };
-  }, [polygons, onPolygonSelect, measurable]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !lines?.length) return;
-    const renderer = L.canvas({ padding: 0.5 });
-    const layer = L.layerGroup(lines.map(({ id, points, color, highlighted, details }) => {
+    const polygonLayers = (polygons ?? []).map(({ id, rings, highlighted, details, color }) => {
+      const style = {
+        fillOpacity: highlighted ? 0.45 : 0.25,
+        weight: highlighted ? 2 : 1.5,
+      };
+      const polygon = L.polygon(rings, {
+        ...style,
+        renderer,
+        interactive: Boolean(onPolygonSelect || details || measurable),
+        color: highlighted ? palette.primary : color ?? "#f59e0b",
+      });
+      if (onPolygonSelect) polygon.on("click", () => {
+        if (activeRulerToolRef.current === "off") onPolygonSelect(id);
+      });
+      if (details) polygon.bindTooltip(createDetailsTooltip(details), { sticky: true, direction: "top", offset: [0, -8] });
+      polygon.on("mouseover", () => {
+        polygon.setStyle({ fillOpacity: style.fillOpacity + 0.15, weight: style.weight + 1 });
+        setHoveredId(id);
+      });
+      polygon.on("mouseout", () => {
+        polygon.setStyle(style);
+        setHoveredId((current) => (current === id ? null : current));
+      });
+      return polygon;
+    });
+    const lineOutlines: L.Polyline[] = [];
+    const lineLayers = (lines ?? []).map(({ id, points, color, highlighted, details }) => {
       const weight = highlighted ? 6 : 4;
-      const line = L.polyline(points, { renderer, color: highlighted ? palette.primary : color ?? "#a855f7", weight,
+      const outline = L.polyline(points, { renderer, color: "#94a3b8", opacity: 0.9, weight: weight + 2, interactive: false });
+      lineOutlines.push(outline);
+      const line = L.polyline(points, { renderer, color: highlighted ? palette.primary : color ?? "#475569", weight,
         interactive: Boolean(onPolygonSelect || details) });
       if (onPolygonSelect) line.on("click", () => {
         if (activeRulerToolRef.current === "off") onPolygonSelect(id);
       });
       if (details) line.bindTooltip(createDetailsTooltip(details), { sticky: true, direction: "top", offset: [0, -8] });
-      line.on("mouseover", () => line.setStyle({ weight: weight + 2 }));
-      line.on("mouseout", () => line.setStyle({ weight }));
+      line.on("mouseover", () => {
+        line.setStyle({ weight: weight + 2 });
+        outline.setStyle({ weight: weight + 4 });
+      });
+      line.on("mouseout", () => {
+        line.setStyle({ weight });
+        outline.setStyle({ weight: weight + 2 });
+      });
       return line;
-    })).addTo(map);
+    });
+    const layer = L.layerGroup([...polygonLayers, ...lineOutlines, ...lineLayers]).addTo(map);
     return () => { layer.remove(); renderer.remove(); };
-  }, [lines, onPolygonSelect]);
+  }, [polygons, lines, onPolygonSelect, measurable]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !editableRings || !onRingsChange) return;
     const rings = editableRings.map((ring) => ring.map((point) => L.latLng(point.lat, point.lng)));
-    const outline = L.polygon(rings, {
+    const style = {
       color: palette.primary,
-      fillOpacity: 0.3,
+      fillOpacity: closedGeometry ? 0.3 : 0,
       interactive: false,
-    }).addTo(map);
+    };
+    const outline = (closedGeometry ? L.polygon(rings, style) : L.polyline(rings, style)).addTo(map);
     const handles: L.Marker[] = [];
     rings.forEach((ring, ringIndex) => {
-      ring.slice(0, -1).forEach((point, index) => {
+      (closedGeometry ? ring.slice(0, -1) : ring).forEach((point, index) => {
         const handle = L.marker(point, {
           draggable: true,
           keyboard: true,
@@ -408,20 +408,45 @@ export function Map({
             iconAnchor: [7, 7],
           }),
         }).addTo(map);
+        handle.on("click", () => onVertexSelect?.(ringIndex, index));
+        handle.on("dragstart", () => onVertexSelect?.(ringIndex, index));
         handle.on("drag", () => {
           rings[ringIndex][index] = handle.getLatLng();
-          if (index === 0) rings[ringIndex][ring.length - 1] = handle.getLatLng();
+          if (closedGeometry && index === 0) rings[ringIndex][ring.length - 1] = handle.getLatLng();
           outline.setLatLngs(rings);
         });
         handle.on("dragend", () => onRingsChange(rings));
+        if (onVertexRemove) {
+          const removable = ring.length > (closedGeometry ? 4 : 2);
+          handle.bindTooltip(removable ? "Drag to move · Right-click to delete" : closedGeometry ? "At least three corners required" : "At least two road nodes required");
+          handle.on("contextmenu", (event: L.LeafletMouseEvent) => {
+            L.DomEvent.stopPropagation(event.originalEvent);
+            if (removable) onVertexRemove(ringIndex, index);
+          });
+        }
         handles.push(handle);
+        vertexHandlesRef.current.push({ marker: handle, ringIndex, index });
       });
     });
     return () => {
       outline.remove();
       handles.forEach((handle) => handle.remove());
+      vertexHandlesRef.current = [];
     };
-  }, [editableRings, onRingsChange]);
+  }, [editableRings, onRingsChange, onVertexRemove, onVertexSelect, closedGeometry]);
+
+  useEffect(() => {
+    for (const { marker, ringIndex, index } of vertexHandlesRef.current) {
+      const active = selectedVertex?.ringIndex === ringIndex && selectedVertex.index === index;
+      const element = marker.getElement();
+      element?.setAttribute("aria-pressed", String(active));
+      const dot = element?.querySelector("span");
+      if (dot) {
+        dot.style.backgroundColor = active ? palette.primary : palette.surface;
+        dot.style.boxShadow = active ? `0 0 0 3px ${palette.primary}` : "none";
+      }
+    }
+  }, [selectedVertex, editableRings]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -434,7 +459,7 @@ export function Map({
     map.getContainer().style.cursor = "crosshair";
     map.doubleClickZoom.disable();
     const finish = () => {
-      if (points.length >= 3) onPolygonDraw([...points, points[0]]);
+      if (points.length >= (closedGeometry ? 3 : 2)) onPolygonDraw(closedGeometry ? [...points, points[0]] : points);
     };
     const click = (event: L.LeafletMouseEvent) => {
       const previous = points.at(-1);
@@ -472,7 +497,7 @@ export function Map({
       map.getContainer().style.cursor = cursor;
       if (doubleClickZoom) map.doubleClickZoom.enable();
     };
-  }, [drawingPolygon, onPolygonDraw, onPolygonDrawCancel]);
+  }, [drawingPolygon, onPolygonDraw, onPolygonDrawCancel, closedGeometry]);
 
   const onAreaSelectRef = useRef(onAreaSelect);
   useEffect(() => {

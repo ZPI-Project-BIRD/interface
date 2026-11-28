@@ -27,3 +27,12 @@ export function replaceOutline(bounds: PolygonCoordinates[], index: number, ring
   const outline = rings.map((ring) => ring.map((point) => projectVertex(point, crs)));
   return bounds.map((polygon, position) => position === index ? outline : polygon);
 }
+
+export function removeOutlineVertex(bounds: PolygonCoordinates[], outlineIndex: number, ringIndex: number, vertexIndex: number, closed = true): PolygonCoordinates[] {
+  const ring = bounds[outlineIndex]?.[ringIndex];
+  if (!ring || ring.length <= (closed ? 4 : 2) || !Number.isInteger(vertexIndex) || vertexIndex < 0 || vertexIndex >= ring.length - (closed ? 1 : 0)) return bounds;
+  const vertices = (closed ? ring.slice(0, -1) : ring).filter((_, index) => index !== vertexIndex);
+  const closedRing = closed ? [...vertices, vertices[0]] : vertices;
+  return bounds.map((polygon, index) => index === outlineIndex
+    ? polygon.map((current, index) => index === ringIndex ? closedRing : current) : polygon);
+}

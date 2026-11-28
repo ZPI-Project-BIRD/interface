@@ -6,7 +6,7 @@ import type {
   ProjectProgress,
   DiscoveryStatus,
   DetectionState,
-  PolygonCoordinates,
+  DetectionBounds,
   AnnotationHistoryEntry,
   SourceFeature,
 } from "../contracts/projects";
@@ -83,11 +83,11 @@ export class ProjectsApi {
     return this.client.post(`${this.projectPath(organizationId, projectId)}/discovery/retry`);
   }
 
-  createDetection(organizationId: string, projectId: string, featureId: string, bounds: PolygonCoordinates[]): Promise<DetectionState> {
+  createDetection(organizationId: string, projectId: string, featureId: string, bounds: Exclude<DetectionBounds, null>): Promise<DetectionState> {
     return this.client.post(`${this.projectPath(organizationId, projectId)}/detections`, { featureId, bounds });
   }
 
-  updateDetection(organizationId: string, projectId: string, detectionId: string, expectedVersion: number, bounds: PolygonCoordinates[]): Promise<DetectionState> {
+  updateDetection(organizationId: string, projectId: string, detectionId: string, expectedVersion: number, bounds: Exclude<DetectionBounds, null>): Promise<DetectionState> {
     return this.client.patch(`${this.detectionPath(organizationId, projectId, detectionId)}`, { expectedVersion, bounds });
   }
 

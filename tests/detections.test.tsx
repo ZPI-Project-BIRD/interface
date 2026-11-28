@@ -4,7 +4,9 @@ import type { Detection, DetectionBounds, DetectionGeometry, FeatureDetections, 
 import { DetectionList } from "../src/components/project/DetectionList";
 import { detectionDetails } from "../src/geo/detectionDetails";
 import { lineLengthM, polygonAreaM2 } from "../src/geo/geometry";
-import { canEditDetection, detectionCount, detectionGeometry, detectionPoints, roadWidth, sheetDetections } from "../src/projects/detections";
+import { canEditDetection, detectionCount, detectionGeometry, detectionPoints, detectionShapePoints, removeDetectionShapes, roadWidth, sheetDetections } from "../src/projects/detections";
+import { annotationBounds, editableGeometry, removeDraftShapes, type AnnotationDraft } from "../src/projects/annotationDrafts";
+import { removeOutlineVertex } from "../src/geo/annotationCoordinates";
 import { mergeAnnotation } from "../src/projects/annotations";
 
 const polygon: PolygonCoordinates = [
@@ -58,9 +60,36 @@ test("road widths stay aligned with lines, including null and missing widths", (
   expect(detectionDetails({ type: "water", coordinates: [polygon] }, 0).rows).toContainEqual({ label: "Water area", value: "96 m²" });
 });
 
-test("legacy-only annotation endpoints cannot strip types or road widths", () => {
-  expect(canEditDetection([polygon])).toBe(true);
-  for (const { bounds } of mixed.detections.slice(1)) expect(canEditDetection(bounds)).toBe(false);
+test("every populated detection is editable without stripping its type or road widths", () => {
+  for (const { bounds } of mixed.detections.slice(0, -1)) {
+    expect(canEditDetection(bounds)).toBe(true);
+    expect(annotationBounds(editableGeometry(bounds))).toEqual(bounds);
+  }
+  expect(canEditDetection(null)).toBe(false);
+});
+
+test("editing a road node keeps the line open and preserves widths", () => {
+  const draft = editableGeometry(roads);
+  const bounds = removeOutlineVertex(draft.bounds, 0, 0, 0, false);
+  expect(annotationBounds({ ...draft, bounds })).toEqual({ ...roads, coordinates: [[[3, 4], [6, 8]], roads.coordinates[1]] });
+  expect(removeOutlineVertex(bounds, 0, 0, 0, false)).toBe(bounds);
+});
+
+test("focusing a selected shape uses only its points and preserves polygon holes", () => {
+  expect(detectionShapePoints(roads, 1)).toEqual(roads.coordinates[1]);
+  for (const type of ["building", "forest", "water"] as const) {
+    expect(detectionShapePoints({ type, coordinates: [[], polygon] }, 1)).toEqual(polygon.flat());
+    expect(detectionShapePoints({ type, coordinates: [polygon] }, 3)).toEqual([]);
+  }
+  expect(detectionShapePoints([polygon], 0)).toEqual(polygon.flat());
+});
+
+test("removing roads keeps the width belonging to each remaining line", () => {
+  const removed = new Set([0]);
+  expect(removeDetectionShapes(roads, removed)).toEqual({ type: "road", coordinates: [roads.coordinates[1]], width_m: [null] });
+  const draft: AnnotationDraft = { ...editableGeometry(roads), featureId: "sheet", crs: "EPSG:2180", expectedVersion: 1 };
+  expect(annotationBounds(removeDraftShapes(draft, removed))).toEqual(removeDetectionShapes(roads, removed));
+  expect(removeDetectionShapes({ type: "forest", coordinates: [polygon, polygon] }, removed)).toEqual({ type: "forest", coordinates: [polygon] });
 });
 
 test("annotation cache merging preserves typed geometry and widths", () => {
